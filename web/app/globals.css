@@ -1615,6 +1615,10 @@ code {
   outline: 1px solid var(--image-outline);
   outline-offset: -1px;
 }
+.reader audio {
+  display: block;
+  width: 100%;
+}
 .reader iframe {
   display: block;
   width: 100%;

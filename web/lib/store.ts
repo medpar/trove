@@ -9,6 +9,7 @@ import { chunk } from '../../extension/lib/util.js';
 import { env } from './env';
 import { extract, fxTweet, mergeClientMeta, plain, youtubeSections, type Extracted, type YouTubeData } from './extract';
 import { fxToPost } from './fx';
+import { formatSize } from './media';
 import { parseQuery, type Query } from './query';
 import { cleanUrl, domainOf, findUrls, isUrl, platformOf, tweetId, urlKey } from './url';
 
@@ -541,6 +542,72 @@ async function saveNote(input: SaveInput): Promise<SaveResult> {
     properties: props,
     icon: { type: 'emoji', emoji: '📝' },
     markdown: [text, input.note ? `## Note\n\n${input.note}` : ''].filter(Boolean).join('\n\n'),
+  });
+  return { item: toItem(page), created: true };
+}
+
+// ---------- uploaded files ----------
+
+/** A file already uploaded to Notion (images, videos, audio, documents sent by agents and scripts). */
+export type StoredFile = { id: string; filename: string; contentType: string; size: number; kind: 'Image' | 'Video' | 'Audio' | 'Document' };
+
+export type FileDetails = { key: string; description?: string; duration?: number | null; poster?: string | null };
+
+/** Saving a file that already exists merges tags, collection and note into it. */
+export async function mergeFile(key: string, input: SaveInput): Promise<SaveResult | null> {
+  await schemaOf();
+  const page = await findLibraryByKey(key);
+  return page ? { item: await mergeInto(page, input), created: false } : null;
+}
+
+const fileBlock = (f: StoredFile, caption?: string) => {
+  const type = f.kind === 'Image' ? 'image' : f.kind === 'Video' ? 'video' : f.kind === 'Audio' ? 'audio' : f.contentType === 'application/pdf' ? 'pdf' : 'file';
+  return { object: 'block', type, [type]: { type: 'file_upload', file_upload: { id: f.id }, caption: caption ? rt(caption) : [], ...(type === 'file' ? { name: f.filename } : {}) } };
+};
+const para = (s: string) => ({ object: 'block', type: 'paragraph', paragraph: { rich_text: rt(s) } });
+const muted = (parts: { text: string; link?: string }[]) => ({
+  object: 'block',
+  type: 'paragraph',
+  paragraph: { rich_text: parts.map((p) => ({ type: 'text', text: { content: p.text, ...(p.link ? { link: { url: p.link } } : {}) }, annotations: { color: 'gray' } })) },
+});
+
+/** Create the item for an uploaded file: the file is the cover (images), the Media property and the first block. */
+export async function createFileItem(f: StoredFile, d: FileDetails, input: SaveInput): Promise<SaveResult> {
+  await schemaOf();
+  const link = input.url && isUrl(input.url) ? cleanUrl(input.url) : '';
+  const domain = link ? domainOf(link) : '';
+  const title = (input.title || f.filename.replace(/\.[a-z0-9]{1,5}$/i, '').replace(/_+/g, ' ').trim() || f.filename).slice(0, 2000);
+  const description = d.description?.trim() || '';
+  const props: Record<string, unknown> = {
+    [L.title]: { title: rt(title) },
+    [L.key]: { rich_text: rt(d.key) },
+    [L.type]: { select: { name: f.kind } },
+    [L.platform]: { select: { name: 'Upload' } },
+    [L.domain]: { rich_text: rt(domain) },
+    [L.description]: { rich_text: rt(description.slice(0, 2000)) },
+    [L.text]: { rich_text: rt([title, f.filename, description, input.note].filter(Boolean).join('\n').slice(0, 12000)) },
+    [L.media]: { files: [{ type: 'file_upload', file_upload: { id: f.id }, name: f.filename.slice(0, 100) }] },
+    [L.highlights]: { number: input.highlight ? 1 : 0 },
+    [L.status]: { select: { name: 'OK' } },
+    ...baseProps(input),
+  };
+  if (link) props[L.url] = { url: link };
+  if (d.duration && d.duration > 0) props[L.duration] = { number: Math.round(d.duration) };
+
+  const footer: { text: string; link?: string }[] = [{ text: `Saved with Trove${input.via ? ` via ${input.via}` : ''} · ${f.filename}${f.size ? ` · ${formatSize(f.size)}` : ''}` }];
+  if (link) footer.push({ text: ' · ' }, { text: 'Open original', link });
+  const children: any[] = [fileBlock(f), muted(footer)];
+  for (const p of description.split(/\n{2,}/).filter(Boolean).slice(0, 40)) children.push(para(p.slice(0, 1900)));
+  if (input.note) children.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: rt('Note') } }, para(input.note));
+  if (input.highlight) children.push({ object: 'block', type: 'heading_2', heading_2: { rich_text: rt('Highlights') } }, { object: 'block', type: 'quote', quote: { rich_text: rt(input.highlight.replace(/\n+/g, ' ')) } });
+
+  const cover = f.kind === 'Image' && !/svg|tiff|heic|heif|vnd\.microsoft\.icon/.test(f.contentType) ? f.id : d.poster || null;
+  const page = await notion().createPage({
+    parent: { type: 'data_source_id', data_source_id: env().libraryDs },
+    properties: props,
+    icon: { type: 'emoji', emoji: f.kind === 'Image' ? '🖼️' : f.kind === 'Video' ? '🎬' : f.kind === 'Audio' ? '🎧' : '📄' },
+    ...(cover ? { cover: { type: 'file_upload', file_upload: { id: cover } } } : {}),
+    children,
   });
   return { item: toItem(page), created: true };
 }

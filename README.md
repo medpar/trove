@@ -3,7 +3,7 @@
 <h1 align="center">Trove</h1>
 
 <p align="center"><b>Save anything, keep everything.</b><br>
-A personal, Raindrop-style library that archives what you save (articles, videos, social posts, repos, papers, notes, browser bookmarks and your X bookmarks) into Notion, so nothing is lost when the original disappears. With a CLI and API for agents, and a built-in librarian agent that runs on your own Claude or ChatGPT subscription.</p>
+A personal, Raindrop-style library that archives what you save (articles, videos, social posts, repos, papers, notes, images and files, browser bookmarks and your X bookmarks) into Notion, so nothing is lost when the original disappears. With a CLI and API for agents, and a built-in librarian agent that runs on your own Claude or ChatGPT subscription.</p>
 
 <p align="center">
   <a href="https://trove.mariomedpar.com">App</a> ·
@@ -34,7 +34,7 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 | **iPhone, iPad, Mac** | The signed **“Save to Trove” Shortcut** (Share sheet in every app + macOS Share menu / Services). It asks for your API key once. |
 | **Android, Windows, ChromeOS** | Install the app (PWA) → it appears in the system share sheet. |
 | **Any browser** | Bookmarklet (Settings → drag “＋ Save to Trove”); selected text becomes a highlight. |
-| **Terminal, scripts & AI agents** | `trove` CLI, REST API, MCP: see below. |
+| **Terminal, scripts & AI agents** | `trove` CLI, REST API, MCP: see below. Agents can also upload images, videos, audio and documents. |
 
 ## AI agents
 
@@ -48,10 +48,12 @@ Trove is built to be driven by agents: anything that can run a command or make a
   trove search '#ai type:article' --json
   trove get <id> --content                 # archived Markdown
   trove update <id> --add-tags ai -c "Dev/AI"
+  trove upload ./screenshot.png ./demo.mp4 -c Design -t ui   # images, videos, audio, PDFs, up to 1 GB
   ```
   Every command takes `--json`. The [skill file](skills/trove/SKILL.md) teaches any skills-aware agent when and how to use it, including filing what it saves (collection, tags and a note) on its own.
-- **REST:** `POST /api/items {url | text, tags, collection, note, highlight}`, `GET /api/items?q=…`, `GET /api/items/:id?content=1`. Docs: [`/llms.txt`](https://trove.mariomedpar.com/llms.txt), [`/openapi.json`](https://trove.mariomedpar.com/openapi.json).
-- **MCP** (optional): `https://trove.mariomedpar.com/api/mcp` with `Authorization: Bearer <key>`.
+- **REST:** `POST /api/items {url | text, tags, collection, note, highlight}`, `GET /api/items?q=…`, `GET /api/items/:id?content=1`.
+- **Files:** `POST /api/files` with a multipart `file` (or raw bytes, base64 `data`, or a public `file_url`) up to 4 MB. Bigger files (up to 1 GB): `POST /api/files/uploads {filename, size}` returns a presigned URL; `PUT` the bytes there, then `POST /api/files {upload}`. The server streams the file into Notion and deletes the staged copy. Same bytes again = merged, never duplicated. Docs: [`/llms.txt`](https://trove.mariomedpar.com/llms.txt), [`/openapi.json`](https://trove.mariomedpar.com/openapi.json).
+- **MCP** (optional): `https://trove.mariomedpar.com/api/mcp` with `Authorization: Bearer <key>`. Tools include `save_file` (base64, URL or upload token) and `create_upload` for big files.
 
 ### Built-in agent
 
@@ -68,7 +70,8 @@ In the web app, open **Agent** (top bar, or ⌘K → “Ask the agent”). The p
 ## Architecture
 
 ```
-web/          Next.js 16 app on Vercel: UI, REST API, MCP server, cron (daily broken-link check)
+web/          Next.js 16 app on Vercel: UI, REST API, MCP server, cron (daily broken-link check, stale upload cleanup)
+  lib/files.ts     File uploads (images, videos, audio, documents) -> Notion, large ones staged in Vercel Blob
   lib/extract.ts   URL -> metadata + archived Markdown (Readability, YouTube, FxTwitter, Reddit, Bluesky, Mastodon, HN, GitHub, arXiv, oEmbed)
   lib/store.ts     Notion data layer: search -> filters, pagination, saves, highlights, stats
   app/api/mcp      MCP tools for agents
@@ -89,7 +92,7 @@ X's web API rotates query ids, feature flags and an `x-client-transaction-id`. T
 ## Self-hosting
 
 1. **Notion:** `node scripts/setup-trove.mjs` creates the Trove database with every column, X bookmarks included (uses `NOTION_TOKEN` or the `ntn` CLI login). Coming from an older version with a separate X Bookmarks database? `node scripts/merge-x-into-trove.mjs` moves those pages in, keeping their content and media.
-2. **Vercel:** create a project with root directory `web`, and set `NOTION_TOKEN`, `TROVE_LIBRARY_DS`, `TROVE_LIBRARY_DB`, `TROVE_PASSWORD`, `TROVE_SESSION_SECRET`, `TROVE_API_KEYS` (`Name:key,Name:key`), `TROVE_PUBLIC_URL`, `CRON_SECRET`. Deploy.
+2. **Vercel:** create a project with root directory `web`, and set `NOTION_TOKEN`, `TROVE_LIBRARY_DS`, `TROVE_LIBRARY_DB`, `TROVE_PASSWORD`, `TROVE_SESSION_SECRET`, `TROVE_API_KEYS` (`Name:key,Name:key`), `TROVE_PUBLIC_URL`, `CRON_SECRET`. For file uploads over 4 MB, connect a private Blob store (`vercel blob create-store trove-uploads --access private`, which sets `BLOB_READ_WRITE_TOKEN`; the free tier is plenty, since staged files are deleted once they are in Notion). Deploy.
 3. **Extension:** load `extension/` unpacked (or the release zip), then set the app URL + API key in its settings.
 4. **Shortcut:** `python3 scripts/make-shortcut.py https://your-app web/public/trove.shortcut` then `shortcuts sign --mode anyone …`.
 

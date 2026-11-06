@@ -23,13 +23,18 @@ export function openapi(base: string) {
       archive: { type: 'boolean', description: 'false = metadata only (faster bulk imports)' },
     },
   };
+  const fileFields = {
+    title: { type: 'string' }, description: { type: 'string', description: 'What the file shows or contains (searchable)' }, note: { type: 'string' },
+    tags: { type: 'string', description: 'comma separated (or an array in JSON)' }, collection: { type: 'string' },
+    url: { type: 'string', description: 'Original link the file came from' }, favorite: { type: 'boolean' }, duration: { type: 'number', description: 'Seconds (videos, audio)' },
+  };
   return {
     openapi: '3.1.0',
     info: {
       title: 'Trove API',
-      version: '2.0.0',
+      version: '2.4.0',
       description:
-        'Personal library: save links/content (articles, videos, social posts, repos, PDFs, notes) into Notion with full-text archive, then search, tag and organize. Auth: Authorization: Bearer <API key>. MCP endpoint: ' +
+        'Personal library: save links/content (articles, videos, social posts, repos, PDFs, notes) and files (images, videos, audio, documents) into Notion with full-text archive, then search, tag and organize. Auth: Authorization: Bearer <API key>. MCP endpoint: ' +
         `${base}/api/mcp`,
     },
     servers: [{ url: base }],
@@ -68,6 +73,44 @@ export function openapi(base: string) {
         post: { operationId: 'addHighlight', summary: 'Add a highlight', parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { text: { type: 'string' }, note: { type: 'string' } }, required: ['text'] } } } }, responses: { 200: { description: 'Item' } } },
       },
       '/api/items/bulk': { post: { operationId: 'bulkUpdate', summary: 'Bulk move/tag/untag/favorite/read/delete', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { ids: { type: 'array', items: { type: 'string' } }, action: { type: 'string' }, value: {} } } } } }, responses: { 200: { description: 'Result' } } } },
+      '/api/files': {
+        post: {
+          operationId: 'saveFile',
+          summary: 'Save an image, video, audio file or document (deduplicated by content). Up to 4 MB per request; bigger files: POST /api/files/uploads first.',
+          parameters: [{ name: 'filename', in: 'query', schema: { type: 'string' }, description: 'With a raw body: the file name (fields like tags and collection can be query params too)' }],
+          requestBody: {
+            content: {
+              'multipart/form-data': { schema: { type: 'object', required: ['file'], properties: { file: { type: 'string', format: 'binary' }, ...fileFields, poster: { type: 'string', format: 'binary', description: 'Cover image for a video' } } } },
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    data: { type: 'string', description: 'File contents as base64 or a data: URL' },
+                    file_url: { type: 'string', description: 'Public direct link Notion can download' },
+                    upload: { type: 'string', description: 'Token from POST /api/files/uploads, after PUTting the bytes' },
+                    filename: { type: 'string' }, content_type: { type: 'string' },
+                    ...fileFields,
+                  },
+                },
+              },
+              'application/octet-stream': { schema: { type: 'string', format: 'binary' } },
+            },
+          },
+          responses: { 201: { description: 'Created {item, created}' }, 200: { description: 'Same file saved before: merged {item, created: false}' } },
+        },
+      },
+      '/api/files/uploads': {
+        post: {
+          operationId: 'createUpload',
+          summary: 'Upload URL for a file over 4 MB (up to 1 GB). PUT the bytes to put.url with put.headers, then POST /api/files {upload}.',
+          requestBody: { content: { 'application/json': { schema: { type: 'object', required: ['filename', 'size'], properties: { filename: { type: 'string' }, size: { type: 'integer' }, content_type: { type: 'string' }, sha256: { type: 'string', description: 'Skip the upload when this file was saved before' }, ...fileFields } } } } },
+          responses: {
+            200: {
+              description: '{upload, put: {method, url, headers}, expires} or, for a file saved before, {duplicate: true, created: false, item}',
+            },
+          },
+        },
+      },
       '/api/lookup': { get: { operationId: 'lookup', summary: 'Which URLs are already saved', parameters: [{ name: 'url', in: 'query', schema: { type: 'array', items: { type: 'string' } }, style: 'form', explode: true }], responses: { 200: { description: 'Map url -> item|null' } } } },
       '/api/stats': { get: { operationId: 'stats', summary: 'Counts: collections, tags, types, filters', responses: { 200: { description: 'Stats' } } } },
       '/api/facets': { patch: { operationId: 'renameFacet', summary: 'Rename/merge/remove a tag or collection', requestBody: { content: { 'application/json': { schema: { type: 'object', properties: { kind: { type: 'string', enum: ['tag', 'collection'] }, from: { type: 'string' }, to: { type: 'string' } } } } } }, responses: { 200: { description: 'Changed count' } } } },

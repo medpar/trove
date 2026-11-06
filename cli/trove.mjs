@@ -4,10 +4,12 @@
 //
 // Config: TROVE_URL + TROVE_API_KEY env vars, or `trove login` (~/.config/trove/config.json).
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { closeSync, createReadStream, openSync, readFileSync, readSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
-import { execFile } from 'node:child_process';
+import { basename, join } from 'node:path';
+import { execFile, execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { Readable } from 'node:stream';
 
 const CONFIG = join(homedir(), '.config', 'trove', 'config.json');
 const DEFAULT_URL = 'https://trove.mariomedpar.com';
@@ -20,6 +22,10 @@ Usage
       -n, --note "…"        Your note       -h, --highlight "…"     Quote to keep as a highlight
           --fav  --read     Flags               --quick             Metadata only (faster)
           --via name        Label who saved it (shown as "Via")
+  trove upload <file…> [options]       Save images, videos, audio or documents from disk (any size up to 1 GB)
+      -t, -c, -n, --fav, --read, --via    Same as save        --title "…"   --description "…"
+          --url <link>          Where the file came from      -  reads the file from stdin (with --filename)
+                                "trove save <file>" does the same for files on disk.
   trove search [query…]                Search (newest first). Syntax: words "phrase" -word #tag
       -l, --limit N   --sort newest|oldest|title|published      type:video site:x.com is:fav is:unread
       -c, --collection Name   --unsorted   --untagged            created:>2025-01 type:x (X bookmarks)
@@ -45,8 +51,8 @@ Global: --json (machine-readable output), --help`;
 
 // ---------- args ----------
 
-const FLAGS = { t: 'tags', c: 'collection', n: 'note', h: 'highlight', l: 'limit' };
-const BOOL = new Set(['json', 'fav', 'read', 'unfav', 'unread', 'quick', 'content', 'unsorted', 'untagged', 'help', 'continue']);
+const FLAGS = { t: 'tags', c: 'collection', n: 'note', h: 'highlight', l: 'limit', d: 'description' };
+const BOOL = new Set(['json', 'fav', 'read', 'unfav', 'unread', 'quick', 'content', 'unsorted', 'untagged', 'help', 'continue', 'noPoster', 'no-poster']);
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -81,15 +87,21 @@ function config() {
   return { url: (process.env.TROVE_URL || file.url || DEFAULT_URL).replace(/\/$/, ''), key: process.env.TROVE_API_KEY || file.key || '' };
 }
 
-async function api(path, { method = 'GET', body } = {}) {
+async function api(path, { method = 'GET', body, form } = {}) {
   const { url, key } = config();
   if (!key) throw new Error('No API key. Run `trove login --key <key>` or set TROVE_API_KEY (Trove → Settings → API keys).');
   const res = await fetch(url + path, {
     method,
-    headers: { authorization: `Bearer ${key}`, 'user-agent': 'trove-cli/1.0', ...(body ? { 'content-type': 'application/json' } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
+    headers: { authorization: `Bearer ${key}`, 'user-agent': 'trove-cli/1.1', ...(body ? { 'content-type': 'application/json' } : {}) },
+    body: form || (body ? JSON.stringify(body) : undefined),
   });
-  const data = await res.json().catch(() => ({}));
+  const text = await res.text();
+  let data = {};
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { error: res.status === 413 ? 'Request too large' : text.slice(0, 200) };
+  }
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
@@ -129,6 +141,8 @@ async function cmdSave(a) {
     if (!text) throw new Error('Nothing to save. Usage: trove save <url|text>');
     inputs = [text];
   }
+  // Files on disk are uploaded (images, videos, audio, documents).
+  if (inputs.every(isFile)) return cmdUpload({ ...a, _: ['upload', ...inputs] });
   // Several bare URLs => one item each; anything else => a single item (text may contain a link).
   const allUrls = inputs.every((s) => /^https?:\/\/\S+$/.test(s));
   const common = {
@@ -157,6 +171,152 @@ async function cmdSave(a) {
     for (const r of results) {
       if (r.error) console.log(`✗ ${r.input || ''}: ${r.error}`);
       else console.log(`${r.created ? '✓ Saved' : '• Already saved'}: ${bold(r.item.title || r.item.url)}${r.item.tags?.length ? ' ' + r.item.tags.map((t) => `#${t}`).join(' ') : ''}\n  ${dim(link(r.item.id))}`);
+    }
+  });
+  if (results.some((r) => r.error)) process.exitCode = 1;
+}
+
+// ---------- files ----------
+
+const DIRECT_MAX = 4_000_000; // bigger files go through an upload URL (the API caps request bodies at 4.5 MB)
+const MIME = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', heic: 'image/heic', heif: 'image/heif',
+  svg: 'image/svg+xml', tif: 'image/tiff', tiff: 'image/tiff', bmp: 'image/bmp', ico: 'image/vnd.microsoft.icon',
+  mp4: 'video/mp4', m4v: 'video/x-m4v', mov: 'video/quicktime', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo', wmv: 'video/x-ms-wmv', mpeg: 'video/mpeg', mpg: 'video/mpeg',
+  mp3: 'audio/mpeg', m4a: 'audio/mp4', aac: 'audio/aac', wav: 'audio/wav', ogg: 'audio/ogg', oga: 'audio/ogg', opus: 'audio/ogg', flac: 'audio/flac',
+  pdf: 'application/pdf', txt: 'text/plain', md: 'text/markdown', csv: 'text/csv', json: 'application/json',
+  doc: 'application/msword', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel', xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ppt: 'application/vnd.ms-powerpoint', pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+};
+const mimeOf = (name) => MIME[/\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase()] || '';
+
+function isFile(p) {
+  if (/^https?:\/\//i.test(p)) return false;
+  try {
+    return statSync(p.replace(/^~(?=\/)/, homedir())).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function sniff(b) {
+  const s = (from, to) => b.subarray(from, to).toString('latin1');
+  if (b.length < 12) return '';
+  if (b[0] === 0x89 && s(1, 4) === 'PNG') return 'image/png';
+  if (b[0] === 0xff && b[1] === 0xd8) return 'image/jpeg';
+  if (s(0, 4) === 'GIF8') return 'image/gif';
+  if (s(0, 4) === 'RIFF' && s(8, 12) === 'WEBP') return 'image/webp';
+  if (s(0, 5) === '%PDF-') return 'application/pdf';
+  if (s(4, 8) === 'ftyp') return /^(heic|heix|mif1)/.test(s(8, 12)) ? 'image/heic' : s(8, 10) === 'qt' ? 'video/quicktime' : 'video/mp4';
+  if (b[0] === 0x1a && b[1] === 0x45 && b[2] === 0xdf && b[3] === 0xa3) return 'video/webm';
+  if (s(0, 3) === 'ID3') return 'audio/mpeg';
+  return '';
+}
+
+async function sha256File(path) {
+  const h = createHash('sha256');
+  for await (const c of createReadStream(path)) h.update(c);
+  return h.digest('hex');
+}
+
+/** A poster frame and the duration of a video, when ffmpeg is installed. Never fails. */
+function videoExtras(path) {
+  const out = {};
+  try {
+    const d = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path], { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] }).trim());
+    if (d > 0) out.duration = Math.round(d);
+  } catch { /* no ffprobe */ }
+  for (const at of [out.duration > 3 ? '1' : '0', '0']) {
+    try {
+      const jpg = execFileSync('ffmpeg', ['-v', 'error', '-ss', at, '-i', path, '-frames:v', '1', '-vf', 'scale=min(1280\\,iw):-2', '-q:v', '4', '-f', 'image2', '-c:v', 'mjpeg', 'pipe:1'], { timeout: 30000, maxBuffer: 8e6, stdio: ['ignore', 'pipe', 'ignore'] });
+      if (jpg.length > 100 && jpg.length < DIRECT_MAX / 2) {
+        out.poster = jpg;
+        break;
+      }
+    } catch { /* no ffmpeg, or no frame there */ }
+  }
+  return out;
+}
+
+async function uploadOne(input, meta, a) {
+  if (/^https?:\/\//i.test(input)) return api('/api/files', { method: 'POST', body: { file_url: input, filename: a.filename, ...meta } });
+  let path = null;
+  let bytes = null;
+  let filename = a.filename;
+  if (input === '-') {
+    const chunks = [];
+    for await (const c of process.stdin) chunks.push(c);
+    bytes = Buffer.concat(chunks);
+    if (!bytes.length) throw new Error('Nothing on stdin');
+  } else {
+    path = input.replace(/^~(?=\/)/, homedir());
+    if (!isFile(path)) throw new Error(`Not a file: ${input}`);
+    filename ||= basename(path);
+  }
+  const size = bytes ? bytes.length : statSync(path).size;
+  const head = bytes || (() => {
+    const fd = openSync(path, 'r');
+    const b = Buffer.alloc(64);
+    try {
+      return b.subarray(0, readSync(fd, b, 0, 64, 0));
+    } finally {
+      closeSync(fd);
+    }
+  })();
+  const type = a.contentType || mimeOf(filename || '') || sniff(head) || 'application/octet-stream';
+  filename ||= `upload.${Object.entries(MIME).find(([, t]) => t === type)?.[0] || 'bin'}`;
+  const extras = path && type.startsWith('video/') && !a.noPoster ? videoExtras(path) : {};
+  const fields = { ...meta, ...(extras.duration ? { duration: extras.duration } : {}) };
+
+  if (size <= DIRECT_MAX) {
+    const form = new FormData();
+    form.append('file', new Blob([bytes || readFileSync(path)], { type }), filename);
+    for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== null) form.append(k, Array.isArray(v) ? v.join(',') : String(v));
+    if (extras.poster) form.append('poster', new Blob([extras.poster], { type: 'image/jpeg' }), 'poster.jpg');
+    return api('/api/files', { method: 'POST', form });
+  }
+
+  const sha256 = bytes ? createHash('sha256').update(bytes).digest('hex') : await sha256File(path);
+  const start = await api('/api/files/uploads', { method: 'POST', body: { filename, content_type: type, size, sha256, ...fields } });
+  if (start.item) return start;
+  if (!a.json && process.stderr.isTTY) process.stderr.write(dim(`Uploading ${filename} (${(size / 1024 ** 2).toFixed(1)} MB)…\n`));
+  const res = await fetch(start.put.url, {
+    method: 'PUT',
+    headers: { ...start.put.headers, 'x-content-length': String(size) },
+    body: bytes || Readable.toWeb(createReadStream(path)),
+    duplex: 'half',
+  });
+  if (!res.ok) throw new Error(`Upload failed (HTTP ${res.status}): ${(await res.text()).slice(0, 200)}`);
+  return api('/api/files', { method: 'POST', body: { upload: start.upload, ...fields, ...(extras.poster ? { poster: extras.poster.toString('base64') } : {}) } });
+}
+
+async function cmdUpload(a) {
+  const inputs = a._.slice(1);
+  if (!inputs.length) throw new Error('Usage: trove upload <file…> [-t tags] [-c Collection] [-n note] [--title "…"] [--description "…"]   (- reads stdin)');
+  const meta = {
+    title: inputs.length === 1 ? a.title : undefined,
+    description: a.description,
+    tags: list(a.tags),
+    collection: a.collection,
+    note: a.note,
+    url: a.url,
+    favorite: a.fav || undefined,
+    read: a.read || undefined,
+    via: a.via,
+  };
+  const results = [];
+  for (const input of inputs) {
+    try {
+      results.push(await uploadOne(input, meta, a));
+    } catch (e) {
+      results.push({ error: e.message, input });
+    }
+  }
+  print(a.json, inputs.length === 1 ? results[0] : { results }, () => {
+    for (const r of results) {
+      if (r.error) console.log(`✗ ${r.input}: ${r.error}`);
+      else console.log(`${r.created ? '✓ Saved' : '• Already saved'} ${r.item.type.toLowerCase()}: ${bold(r.item.title)}${r.item.collection ? ` [${r.item.collection}]` : ''}${r.item.tags?.length ? ' ' + r.item.tags.map((t) => `#${t}`).join(' ') : ''}\n  ${dim(link(r.item.id))}`);
     }
   });
   if (results.some((r) => r.error)) process.exitCode = 1;
@@ -343,6 +503,7 @@ const a = parseArgs(process.argv.slice(2));
 const cmd = a._[0];
 const run = {
   save: cmdSave, add: cmdSave, s: cmdSave,
+  upload: cmdUpload, file: cmdUpload,
   search: cmdSearch, find: cmdSearch, ls: cmdSearch, list: cmdSearch,
   get: cmdGet, show: cmdGet, read: cmdGet,
   update: cmdUpdate, edit: cmdUpdate,

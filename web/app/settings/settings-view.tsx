@@ -188,16 +188,16 @@ export default function SettingsView() {
 
       <section>
         <h2>CLI and API for agents</h2>
-        <p>Any agent or script that can run a command or make an HTTP request can save to Trove and search it. Nothing agent-specific to configure: give it the CLI or the API and a key.</p>
+        <p>Any agent or script that can run a command or make an HTTP request can save to Trove and search it, including images, videos, audio and documents it uploads. Nothing agent-specific to configure: give it the CLI or the API and a key.</p>
         <div>
           <span className="field-label">CLI (Node 20 or later)</span>
-          <Code>{`npm install -g github:medpar/trove\ntrove login --url ${base} --key ${shownKey}\n\ntrove save https://example.com -t ai,reading -n "why it matters"\ntrove search "#ai type:article" --json\ntrove get <id> --content`}</Code>
+          <Code>{`npm install -g github:medpar/trove\ntrove login --url ${base} --key ${shownKey}\n\ntrove save https://example.com -t ai,reading -n "why it matters"\ntrove upload ./screenshot.png ./demo.mp4 -c "Design" -t ui\ntrove search "#ai type:article" --json\ntrove get <id> --content`}</Code>
           <p className="field-hint">Every command takes <code>--json</code>. Run <code>trove --help</code> for the full list. Agents can also read the <a className="inline-link" href="https://github.com/medpar/trove/tree/main/skills/trove" target="_blank" rel="noreferrer">skill file</a>.</p>
         </div>
         <div>
           <span className="field-label">REST</span>
-          <Code>{`curl -X POST ${base}/api/items \\\n  -H "Authorization: Bearer ${shownKey}" \\\n  -H "content-type: application/json" \\\n  -d '{"url":"https://example.com","tags":["ai"],"note":"why it matters"}'`}</Code>
-          <p className="field-hint">Reference: <a className="inline-link" href="/llms.txt">llms.txt</a> and <a className="inline-link" href="/openapi.json">openapi.json</a>.</p>
+          <Code>{`curl -X POST ${base}/api/items \\\n  -H "Authorization: Bearer ${shownKey}" \\\n  -H "content-type: application/json" \\\n  -d '{"url":"https://example.com","tags":["ai"],"note":"why it matters"}'\n\ncurl -X POST ${base}/api/files \\\n  -H "Authorization: Bearer ${shownKey}" \\\n  -F file=@photo.jpg -F tags=travel -F collection=Photos`}</Code>
+          <p className="field-hint">Files up to 4 MB go in one request; bigger ones (up to 1 GB) get an upload URL from <code>/api/files/uploads</code>. Reference: <a className="inline-link" href="/llms.txt">llms.txt</a> and <a className="inline-link" href="/openapi.json">openapi.json</a>.</p>
         </div>
         <div>
           <span className="field-label">MCP (for clients that prefer it)</span>

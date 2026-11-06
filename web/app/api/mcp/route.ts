@@ -5,13 +5,16 @@ import { z } from 'zod';
 import { caller, unauthorized, type Caller } from '@/lib/auth';
 import { addHighlight, getItem, invalidateStats, list, lookup, remove, renameFacet, save, stats, update, type Item } from '@/lib/store';
 import { toSaveInput } from '@/lib/input';
+import { createUpload, saveFile, type FileSource } from '@/lib/files';
+import { decodeBase64, dataUrlType } from '@/lib/media';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const INSTRUCTIONS = `Trove is the user's personal read-it-later library and archive (Raindrop-style) backed by Notion.
 Use it whenever the user shares a link or content and wants it kept ("save this", "bookmark", "read later", "remember this article", or simply sends a bare link with no other request).
 - save: store a URL (articles, YouTube, X/Reddit/Bluesky/Mastodon posts, GitHub repos, PDFs...) or plain text as a note. Trove fetches title, description, cover, the full article text / transcript, and never creates duplicates (saving again merges tags/notes).
 - search: find saved items. Query syntax: words, "exact phrase", -exclude, #tag, type:video|article|post|x|repo|note (type:x = X bookmarks), site:domain, collection:"Name", is:fav, is:unread, created:>2025-01, highlights:true.
+- save_file: store an image, video, audio file or document (screenshots, generated images, recordings, PDFs). Pass base64 "data" (up to ~3 MB) or a public "file_url". For bigger files call create_upload, PUT the bytes to the returned URL (e.g. with curl), then call save_file with "upload". Saving the same file again merges instead of duplicating.
 - get_item returns the archived full content (Markdown) for summarizing or answering questions.
 File everything you save without asking: call list_collections and list_tags once, then pass the best existing collection (nested with "/", create one only when nothing fits; never "Browser bookmarks", "X bookmarks" or "Pinterest", which Trove fills itself), 1-4 short lowercase tags and, when the user gave context, a one-line note. Write collection names, tags, notes and any title you set in English, even if the content or request is in another language. Trove detects the content type itself. Report only what tool results confirm.`;
 
@@ -78,6 +81,84 @@ function build(who: Caller) {
           }
           invalidateStats();
           return ok({ results });
+        },
+      );
+
+      const fileMeta = {
+        title: z.string().optional().describe('Title; defaults to the file name.'),
+        description: z.string().optional().describe('What the file shows or contains (searchable).'),
+        note: z.string().optional().describe('Your note about why it matters.'),
+        tags: z.array(z.string()).max(5).optional(),
+        collection: z.string().optional().describe('Collection name; nested with "/", e.g. "Design/Screenshots".'),
+        url: z.string().optional().describe('Original link the file came from, if any.'),
+        favorite: z.boolean().optional(),
+      };
+
+      server.registerTool(
+        'save_file',
+        {
+          title: 'Save an image, video or file',
+          description:
+            'Save an image, video, audio file or document to Trove. Give exactly one of: data (base64 or a data: URL, files up to ~3 MB), file_url (a public direct link Notion can download) or upload (from create_upload, for big files). Returns the item and whether it already existed.',
+          inputSchema: z.object({
+            data: z.string().optional().describe('File contents as base64 or a data: URL.'),
+            file_url: z.string().optional().describe('Public, direct URL of the file.'),
+            upload: z.string().optional().describe('The upload token from create_upload, after PUTting the bytes.'),
+            filename: z.string().optional().describe('File name with extension, e.g. "chart.png". Recommended with data.'),
+            content_type: z.string().optional().describe('MIME type, e.g. "image/png". Guessed from the name or bytes when omitted.'),
+            ...fileMeta,
+          }),
+        },
+        async (a) => {
+          try {
+            const source: FileSource | null = a.upload
+              ? { kind: 'upload', token: a.upload }
+              : a.data
+                ? { kind: 'bytes', bytes: decodeBase64(a.data), filename: a.filename, contentType: a.content_type || dataUrlType(a.data) || undefined }
+                : a.file_url
+                  ? { kind: 'url', url: a.file_url, filename: a.filename, contentType: a.content_type }
+                  : null;
+            if (!source) return fail(new Error('Pass data, file_url or upload'));
+            const r = await saveFile(source, toSaveInput({ title: a.title, note: a.note, tags: a.tags, collection: a.collection, url: a.url, favorite: a.favorite, source: 'Agent' }, who), { description: a.description });
+            invalidateStats();
+            return ok({ created: r.created, item: brief(r.item) });
+          } catch (e) {
+            return fail(e);
+          }
+        },
+      );
+
+      server.registerTool(
+        'create_upload',
+        {
+          title: 'Get an upload URL for a big file',
+          description:
+            'For files too big to send as base64 (over ~3 MB, e.g. videos). Returns put.url and put.headers: send the raw bytes there with an HTTP PUT (curl -X PUT --data-binary @file "<url>" -H "<header>: <value>" …), then call save_file with the returned upload. If sha256 matches a file already saved, returns that item instead and nothing needs uploading.',
+          inputSchema: z.object({
+            filename: z.string().describe('File name with extension.'),
+            size: z.number().int().positive().describe('Size in bytes.'),
+            content_type: z.string().optional(),
+            sha256: z.string().optional().describe('Hex SHA-256 of the file, to skip uploading files saved before.'),
+            ...fileMeta,
+          }),
+        },
+        async (a) => {
+          try {
+            const r = await createUpload(
+              { filename: a.filename, contentType: a.content_type, size: a.size, sha256: a.sha256 },
+              toSaveInput({ title: a.title, note: a.note, tags: a.tags, collection: a.collection, url: a.url, favorite: a.favorite, source: 'Agent' }, who),
+            );
+            if ('item' in r) {
+              invalidateStats();
+              return ok({ duplicate: true, created: false, item: brief(r.item) });
+            }
+            const curl = `curl -sS -X PUT --data-binary @${JSON.stringify(a.filename)} ${JSON.stringify(r.put.url)} ${Object.entries(r.put.headers)
+              .map(([k, v]) => `-H ${JSON.stringify(`${k}: ${v}`)}`)
+              .join(' ')}`;
+            return ok({ ...r, curl, then: { tool: 'save_file', arguments: { upload: r.upload, title: a.title, description: a.description, tags: a.tags, collection: a.collection, note: a.note } } });
+          } catch (e) {
+            return fail(e);
+          }
         },
       );
 
@@ -227,7 +308,7 @@ function build(who: Caller) {
         },
       );
     },
-    { serverInfo: { name: 'trove', version: '2.0.0' }, instructions: INSTRUCTIONS },
+    { serverInfo: { name: 'trove', version: '2.4.0' }, instructions: INSTRUCTIONS },
   );
 }
 

@@ -29,6 +29,11 @@ function notionToHtmlish(md: string) {
       const e = embedSrc(src);
       return e ? `\n\n<iframe src="${attr(e)}" allowfullscreen loading="lazy"></iframe>\n\n` : `\n\n<a class="bookmark" href="${attr(src)}">${attr(src)}</a>\n\n`;
     })
+    .replace(/<audio src="([^"]+)"[^>]*><\/audio>/g, (_m, src) => `\n\n<audio src="${attr(src)}" controls preload="metadata"></audio>\n\n`)
+    .replace(/<(pdf|file) src="([^"]+)"[^>]*>(?:<\/(?:pdf|file)>)?/g, (_m, kind, src) => {
+      const name = decodeURIComponent(src.split('?')[0].split('/').pop() || '') || (kind === 'pdf' ? 'PDF' : 'File');
+      return `\n\n<a class="bookmark" href="${attr(src)}">${attr(name)}</a>\n\n`;
+    })
     .replace(/<bookmark url="([^"]+)"[^>]*>(?:<\/bookmark>)?/g, (_m, u) => `\n\n<a class="bookmark" href="${attr(u)}">${attr(u.replace(/^https?:\/\//, ''))}</a>\n\n`)
     .replace(/<callout(?: icon="([^"]*)")?[^>]*>([\s\S]*?)<\/callout>/g, (_m, icon, body) => `\n\n<div class="callout"><span>${icon || '💡'}</span><div>${marked.parseInline(body.trim())}</div></div>\n\n`)
     .replace(/<span color="([\w_]+)">/g, (_m, c) => `<span class="${/gray/.test(c) ? 'gray' : ''}">`)
@@ -48,7 +53,7 @@ function purify(html: string) {
       if (node.tagName === 'IMG') node.setAttribute('loading', 'lazy');
     });
   }
-  return DOMPurify.sanitize(html, { ADD_TAGS: ['iframe', 'video'], ADD_ATTR: ['allowfullscreen', 'target', 'controls', 'preload', 'loading'] });
+  return DOMPurify.sanitize(html, { ADD_TAGS: ['iframe', 'video', 'audio'], ADD_ATTR: ['allowfullscreen', 'target', 'controls', 'preload', 'loading'] });
 }
 
 /** Drop the "## Note" block when it repeats the item's note (shown as a property above). */
