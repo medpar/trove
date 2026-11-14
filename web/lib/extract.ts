@@ -487,12 +487,24 @@ async function hackerNews(url: string): Promise<Extracted> {
   return e;
 }
 
+/** GitHub API headers; GITHUB_TOKEN (optional, no scopes needed) lifts the 60 requests/hour limit. */
+export const githubHeaders = (accept = 'application/vnd.github+json'): Record<string, string> => ({
+  accept,
+  'x-github-api-version': '2022-11-28',
+  ...(process.env.GITHUB_TOKEN?.trim() ? { authorization: `Bearer ${process.env.GITHUB_TOKEN.trim()}` } : {}),
+});
+
 async function github(url: string): Promise<Extracted> {
   const m = /github\.com\/([^/]+)\/([^/#?]+)\/?$/.exec(url);
   if (!m) return fallbackHtml(url, base(url, 'GitHub'));
+  const repo = await getJson<any>(`https://api.github.com/repos/${m[1]}/${m[2]}`, { headers: githubHeaders() });
+  if (!repo) return fallbackHtml(url, base(url, 'GitHub'));
+  return githubRepo(repo, url);
+}
+
+/** A repo as Trove stores it, from a GitHub API repo object (README read from raw.githubusercontent.com, which costs no API quota). */
+export async function githubRepo(repo: any, url = repo.html_url): Promise<Extracted> {
   const e = base(url, 'GitHub');
-  const repo = await getJson<any>(`https://api.github.com/repos/${m[1]}/${m[2]}`, { headers: { accept: 'application/vnd.github+json' } });
-  if (!repo) return fallbackHtml(url, e);
   e.type = 'Repo';
   e.title = repo.full_name;
   e.description = repo.description || '';
@@ -501,10 +513,15 @@ async function github(url: string): Promise<Extracted> {
   e.image = `https://opengraph.githubassets.com/1/${repo.full_name}`;
   e.extra = { stars: repo.stargazers_count, forks: repo.forks_count, language: repo.language, topics: repo.topics, license: repo.license?.spdx_id };
   let readme = '';
-  try {
-    const r = await get(`https://api.github.com/repos/${repo.full_name}/readme`, { accept: 'application/vnd.github.raw' });
-    if (r.ok) readme = r.text;
-  } catch { /* no readme */ }
+  for (const name of ['README.md', 'readme.md', 'README.rst', 'README']) {
+    try {
+      const r = await get(`https://raw.githubusercontent.com/${repo.full_name}/HEAD/${name}`, { accept: 'text/plain' });
+      if (r.ok && r.text.trim()) {
+        readme = r.text;
+        break;
+      }
+    } catch { /* try the next name */ }
+  }
   const facts = [`★ ${repo.stargazers_count}`, `⑂ ${repo.forks_count}`, repo.language, repo.license?.spdx_id].filter(Boolean).join(' · ');
   const parts = [facts];
   if (repo.homepage) parts.push(`Homepage: [${repo.homepage}](${repo.homepage})`);

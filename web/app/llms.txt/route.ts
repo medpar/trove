@@ -21,7 +21,7 @@ trove tags --json | trove collections --json
 Run \`trove --help\` for everything.
 
 ## When you save something
-File it without asking: list existing collections and tags first (trove collections --json, trove tags --json, or GET /api/stats), pass the best collection (nested with "/"; create one only when nothing fits; never "Browser bookmarks", "X bookmarks" or "Pinterest", which Trove fills itself), 1-4 short lowercase tags, and a one-line note when the user gave context. Write collection names, tags, notes and any title you set in English, even if the content or request is in another language. Trove detects the content type (article, video, X bookmark, repo...) itself. For a file, set a real title when its name is meaningless (IMG_2041.jpg) and describe what it shows in "description" so search finds it.
+File it without asking: list existing collections and tags first (trove collections --json, trove tags --json, or GET /api/stats), pass the best collection (nested with "/"; create one only when nothing fits; never "Browser bookmarks", "X bookmarks", "Pinterest" or "GitHub stars", which Trove fills itself), 1-4 short lowercase tags, and a one-line note when the user gave context. Write collection names, tags, notes and any title you set in English, even if the content or request is in another language. Trove detects the content type (article, video, X bookmark, repo...) itself. For a file, set a real title when its name is meaningless (IMG_2041.jpg) and describe what it shows in "description" so search finds it.
 
 ## REST
 - POST ${base}/api/items  JSON {url | text, title?, note?, tags?, collection?, highlight?, favorite?}  -> saves (deduplicated; saving again merges tags and notes). {items:[...]} saves up to 25 at once.

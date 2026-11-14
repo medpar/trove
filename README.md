@@ -18,7 +18,7 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 ## What it does
 
 - **Archives the content, not just the link.** Articles are stored as clean text (Readability), YouTube videos with description and transcript, X/Reddit/Bluesky/Mastodon/Hacker News posts with their text and media, GitHub repos with their README, arXiv papers with abstract and the PDF, any PDF or image file. Covers and media are copied into Notion's file storage.
-- **One Notion database for everything.** `Trove` holds everything you save. Your X bookmarks live in it as their own type, **X bookmark**, in the **X bookmarks** collection, filled automatically by the extension (full threads, reply context, media, likes and views). Browser bookmarks go to **Browser bookmarks** and Pinterest saves to **Pinterest**, each with their folders or boards inside.
+- **One Notion database for everything.** `Trove` holds everything you save. Your X bookmarks live in it as their own type, **X bookmark**, in the **X bookmarks** collection, filled automatically by the extension (full threads, reply context, media, likes and views). Browser bookmarks go to **Browser bookmarks** and Pinterest saves to **Pinterest** and your GitHub stars to **GitHub stars**, each with their folders or boards inside where they have them.
 - **Never a duplicate.** URLs are normalized (tracking params, `www`, mobile hosts, `youtu.be`, `?s=20`, arXiv versions…). Saving again merges tags, notes and highlights instead.
 - **Organize like Raindrop.** Nested collections (`Dev/AI`), tags, favorites, read-later, notes, highlights, reminders, broken-link detection, bulk edit, four views (cards, list, headlines, moodboard), keyboard-first UI, light & dark themes.
 - **Search with operators:** `"phrase"`, `-word`, `#tag`, `-#tag`, `type:video`, `site:github.com`, `collection:"Dev/AI"`, `is:fav`, `is:unread`, `created:>2025-01`, `highlights:true`, `source:x`, `match:OR`.
@@ -41,6 +41,7 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 | **Email** | Send or forward to your Trove address: links become links, newsletters become articles, attachments become files; `#tags @Collection` in the subject. Cloudflare Email Routing → `workers/email` → `/api/inbound/email`. |
 | **Raycast** (Mac) | `raycast/`: save the front tab or clipboard, search by meaning with previews, ask your library. |
 | **Feeds** | RSS, Atom, Substack, YouTube channels, OPML. |
+| **GitHub stars** | Every repo you star is saved to the **GitHub stars** collection with its README, twice a day (`GITHUB_STARS_USER`, optional `GITHUB_TOKEN`). |
 | **Android, Windows, ChromeOS** | Install the app (PWA) → it appears in the system share sheet. |
 | **Any browser** | Bookmarklet (Settings → drag “＋ Save to Trove”); selected text becomes a highlight. |
 | **Terminal, scripts & AI agents** | `trove` CLI, REST API, MCP: see below. Agents can also upload images, videos, audio and documents. |

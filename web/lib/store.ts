@@ -333,6 +333,10 @@ export type SaveInput = {
   archive?: boolean;
   /** false: never let AI pick a collection or tags for this save. */
   autofile?: boolean;
+  /** Already extracted by the caller (server-side syncs), so nothing is fetched again. */
+  extracted?: Extracted;
+  /** When it was bookmarked or starred at the source. */
+  bookmarked?: string;
 };
 
 export type SaveResult = { item: Item; created: boolean };
@@ -385,7 +389,9 @@ export async function save(input: SaveInput): Promise<SaveResult> {
   const existing = await findLibraryByKey(key);
   if (existing) return { item: await mergeInto(existing, { ...input, note }), created: false };
 
-  let e: Extracted = input.meta?.pin
+  let e: Extracted = input.extracted
+    ? input.extracted
+    : input.meta?.pin
     ? pinExtracted(url, input.meta)
     : input.archive === false
       ? await extractLite(url)
@@ -492,6 +498,7 @@ async function createLibraryPage(url: string, key: string, e: Extracted, input: 
     ...baseProps(input),
   };
   if (e.published) props[L.published] = { date: { start: e.published } };
+  if (input.bookmarked) props[L.bookmarked] = { date: { start: input.bookmarked } };
   if (e.lang) props[L.lang] = { select: { name: e.lang } };
   if (typeof e.extra.link === 'string') props[L.link] = { url: e.extra.link };
 
@@ -644,7 +651,7 @@ async function mergeInto(page: any, input: SaveInput): Promise<Item> {
   const props: Record<string, unknown> = {};
   if (input.tags?.length) props[T.tags] = { multi_select: uniq([...item.tags, ...input.tags]).map((name) => ({ name })) };
   // Imports and synced bookmarks never move something you already filed somewhere else.
-  const bulk = input.source === 'Browser bookmarks' || input.source === 'Import';
+  const bulk = input.source === 'Browser bookmarks' || input.source === 'Import' || input.source === 'GitHub';
   if (input.collection && input.collection !== item.collection && !(bulk && item.collection)) props[T.collection] = { select: { name: selName(input.collection) } };
   if (input.note && !item.note.includes(input.note)) props[T.note] = { rich_text: rt([item.note, input.note].filter(Boolean).join('\n\n')) };
   if (input.favorite) props[T.favorite] = { checkbox: true };

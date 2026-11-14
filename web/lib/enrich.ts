@@ -4,16 +4,16 @@
 // a failure in one never undoes the save or blocks the others.
 import 'server-only';
 import { AIUnavailable, MODELS, aiEnabled, complete, completeJson, embed, packVector, type Part } from './ai';
-import { BROWSER_COLLECTION, PINTEREST_COLLECTION, X_COLLECTION } from './library-schema.js';
+import { BROWSER_COLLECTION, GITHUB_COLLECTION, PINTEREST_COLLECTION, X_COLLECTION } from './library-schema.js';
 import { env } from './env';
 import { buildSnapshot, waybackSave } from './snapshot';
 import { FULLTEXT_MAX, L, X_TYPE, invalidateStats, notion, rt, schemaOf, stats, toItem, type Item, type SaveInput, type SaveResult } from './store';
 
-const SYSTEM_COLLECTIONS = [X_COLLECTION, BROWSER_COLLECTION, PINTEREST_COLLECTION];
+const SYSTEM_COLLECTIONS = [X_COLLECTION, BROWSER_COLLECTION, PINTEREST_COLLECTION, GITHUB_COLLECTION];
 const isSystem = (c: string) => SYSTEM_COLLECTIONS.some((s) => c === s || c.startsWith(`${s}/`));
 
 /** Sources that bring things in bulk: they are summarized and indexed, but never re-filed. */
-export const BULK_SOURCES = new Set(['Import', 'Browser bookmarks', 'Pinterest', 'Feed']);
+export const BULK_SOURCES = new Set(['Import', 'Browser bookmarks', 'Pinterest', 'Feed', 'GitHub']);
 
 export type EnrichOptions = {
   /** Pick a collection and tags when the item has none (default: only for fresh captures). */

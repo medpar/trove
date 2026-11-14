@@ -1,5 +1,5 @@
 'use client';
-import { ArrowLeft, Command, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Landmark, Link2, LogOut, Mail, MessageCircle, MonitorSmartphone, Puzzle, Rss, Smartphone, Sparkles, Upload, Wrench } from 'lucide-react';
+import { ArrowLeft, Command, Copy, RefreshCw, Star, Download, ExternalLink, Eye, EyeOff, KeyRound, Landmark, Link2, LogOut, Mail, MessageCircle, MonitorSmartphone, Puzzle, Rss, Smartphone, Sparkles, Upload, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { api, refreshAll } from '@/components/api';
@@ -112,6 +112,32 @@ export default function SettingsView() {
   const [health, setHealth] = useState<string>('');
   const [backfill, setBackfill] = useState<{ done: number; running: boolean; note?: string } | null>(null);
   const [tgStatus, setTgStatus] = useState<string>('');
+  const stars = useSWR<{ config: { user: string; token: boolean } | null; state: { synced: number; lastRun?: string; lastError?: string | null; backfillDone: boolean; rateLimit?: { remaining: number } | null } | null }>('/api/github', (u: string) => api(u));
+  const [starsBusy, setStarsBusy] = useState(false);
+  const syncStarsNow = async () => {
+    setStarsBusy(true);
+    try {
+      let total = 0;
+      for (let i = 0; i < 10; i++) {
+        const r = await api<{ saved: number; merged: number; backfillDone: boolean; error: string | null }>('/api/github', { method: 'POST' });
+        total += r.saved;
+        if (r.error) {
+          toast.push({ text: `GitHub sync stopped: ${r.error}` });
+          break;
+        }
+        if (r.backfillDone) {
+          toast.push({ text: total ? `Saved ${total} starred repo${total === 1 ? '' : 's'}` : 'Your GitHub stars are up to date' });
+          break;
+        }
+      }
+    } catch (e: any) {
+      toast.push({ text: `GitHub sync failed: ${e.message}` });
+    } finally {
+      setStarsBusy(false);
+      stars.mutate();
+      refreshAll();
+    }
+  };
 
   const runBackfill = async () => {
     setBackfill({ done: 0, running: true });
@@ -242,6 +268,29 @@ export default function SettingsView() {
             <h3><Puzzle size={16} /> Browser extension</h3>
             <p>Brave, Chrome, Edge and Arc. Save the page you’re on (logged-in pages are archived too), links, images and selections, and keep browser bookmarks, X bookmarks and Pinterest in sync.</p>
             <a className="btn" href="https://github.com/medpar/trove/releases/latest" target="_blank" rel="noreferrer"><Download size={15} /> Download</a>
+          </div>
+          <div className="mini-card">
+            <h3><Star size={16} /> GitHub stars</h3>
+            {stars.data?.config ? (
+              <>
+                <p>Every repo <strong>@{stars.data.config.user}</strong> stars is saved to the GitHub stars collection with its README, twice a day.</p>
+                <div className="row-actions-inline">
+                  <button className="btn" onClick={syncStarsNow} disabled={starsBusy}>
+                    {starsBusy ? <span className="spinner" /> : <RefreshCw size={15} />} Sync now
+                  </button>
+                  <a className="btn ghost" href={`/?s=${encodeURIComponent('collection:GitHub stars')}`}>Open</a>
+                </div>
+                <p className="field-hint" role="status">
+                  {stars.data.state?.lastError
+                    ? `Last sync: ${stars.data.state.lastError}`
+                    : stars.data.state?.lastRun
+                      ? `${stars.data.state.synced.toLocaleString()} repos saved · last sync ${new Date(stars.data.state.lastRun).toLocaleString()}${stars.data.state.backfillDone ? '' : ' · first sync in progress'}`
+                      : 'Not synced yet.'}
+                </p>
+              </>
+            ) : (
+              <p>Set <code>GITHUB_STARS_USER</code> to your GitHub username (and optionally <code>GITHUB_TOKEN</code>) to save every repo you star.</p>
+            )}
           </div>
           <div className="mini-card">
             <h3><Command size={16} /> Raycast</h3>

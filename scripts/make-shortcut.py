@@ -44,7 +44,7 @@ IS, BEGINS_WITH, CONTAINS, NOT_CONTAINS, HAS_VALUE, NO_VALUE = 4, 8, 99, 999, 10
 # names the device itself reports at run time, so that check works in any language.
 FILE_TYPES = '|Image|Imagen|PDF|File|Archivo|Media|Contenido|'
 # Collections Trove fills itself; the collection picker hides them.
-AUTO_COLLECTIONS = r'(?m)^(?!(?:Browser bookmarks|X bookmarks|Pinterest)(?:/|$)).+$'
+AUTO_COLLECTIONS = r'(?m)^(?!(?:Browser bookmarks|X bookmarks|Pinterest|GitHub stars)(?:/|$)).+$'
 # How a JSON false may read as text; anything else counts as newly saved.
 FALSY = ['0', 'false', 'False', 'FALSE', 'No', 'no', 'NO']
 

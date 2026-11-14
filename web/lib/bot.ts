@@ -9,10 +9,10 @@ import {
   TG_FILE_MAX, cardKeyboard, cardText, collectionKeyboard, downloadFile, esc, hash4, itemIdIn, linksIn, listMessage, parseDirectives, resolveCollection, resolveTag, short, tagKeyboard,
   telegramConfig, tg, troveLink, type CardState, type Directives,
 } from './telegram';
-import { BROWSER_COLLECTION, PINTEREST_COLLECTION, X_COLLECTION } from './library-schema.js';
+import { BROWSER_COLLECTION, GITHUB_COLLECTION, PINTEREST_COLLECTION, X_COLLECTION } from './library-schema.js';
 
 const VIA = 'Telegram';
-const SYSTEM = [X_COLLECTION, BROWSER_COLLECTION, PINTEREST_COLLECTION];
+const SYSTEM = [X_COLLECTION, BROWSER_COLLECTION, PINTEREST_COLLECTION, GITHUB_COLLECTION];
 
 // Telegram may deliver an update twice if a response is slow; remember recent ones per instance.
 const seen = new Set<number>();
