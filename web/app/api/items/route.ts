@@ -1,9 +1,11 @@
+import { after } from 'next/server';
 import { guarded, json } from '@/lib/auth';
+import { afterSave } from '@/lib/enrich';
 import { readBody, toSaveInput } from '@/lib/input';
 import { invalidateStats, list, save, type Sort } from '@/lib/store';
 import { normalizeType } from '@/lib/query';
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /** GET /api/items?q=&collection=&tag=&type=&favorite=1&unread=1&source=all|library|x&sort=newest&cursor=&limit= */
 export const GET = guarded(async (req) => {
@@ -38,8 +40,10 @@ export const POST = guarded(async (req, who) => {
   const body = await readBody(req);
   const batch: any[] = Array.isArray(body?.items) ? body.items.slice(0, 25) : null;
   if (!batch) {
-    const r = await save(toSaveInput(body, who));
+    const input = toSaveInput(body, who);
+    const r = await save(input);
     invalidateStats();
+    after(() => afterSave(r, input).catch((e) => console.error('enrich', e)));
     return json(r, { status: r.created ? 201 : 200 });
   }
   const results: any[] = new Array(batch.length);
@@ -49,7 +53,10 @@ export const POST = guarded(async (req, who) => {
       while (next < batch.length) {
         const i = next++;
         try {
-          results[i] = await save(toSaveInput(batch[i], who));
+          const input = toSaveInput(batch[i], who);
+          results[i] = await save(input);
+          const r = results[i];
+          after(() => afterSave(r, input).catch((e) => console.error('enrich', e)));
         } catch (e: any) {
           results[i] = { error: e?.message || String(e), input: batch[i]?.url || batch[i]?.text?.slice(0, 80) };
         }

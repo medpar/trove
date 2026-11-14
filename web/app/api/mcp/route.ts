@@ -1,6 +1,9 @@
 // Remote MCP server (Streamable HTTP) so any agent (Claude Code, Hermes, Cursor, ChatGPT,
 // custom assistants) can save to and search Trove. Auth: Authorization: Bearer <api key>.
+import { after } from 'next/server';
 import { createMcpHandler } from 'mcp-handler';
+import { afterSave } from '@/lib/enrich';
+import { ask, hybridSearch, related } from '@/lib/semantic';
 import { z } from 'zod';
 import { caller, unauthorized, type Caller } from '@/lib/auth';
 import { addHighlight, getItem, invalidateStats, list, lookup, remove, renameFacet, save, stats, update, type Item } from '@/lib/store';
@@ -15,6 +18,7 @@ Use it whenever the user shares a link or content and wants it kept ("save this"
 - save: store a URL (articles, YouTube, X/Reddit/Bluesky/Mastodon posts, GitHub repos, PDFs...) or plain text as a note. Trove fetches title, description, cover, the full article text / transcript, and never creates duplicates (saving again merges tags/notes).
 - search: find saved items. Query syntax: words, "exact phrase", -exclude, #tag, type:video|article|post|x|repo|note (type:x = X bookmarks), site:domain, collection:"Name", is:fav, is:unread, created:>2025-01, highlights:true.
 - save_file: store an image, video, audio file or document (screenshots, generated images, recordings, PDFs). Pass base64 "data" (up to ~3 MB) or a public "file_url". For bigger files call create_upload, PUT the bytes to the returned URL (e.g. with curl), then call save_file with "upload". Saving the same file again merges instead of duplicating.
+- smart_search finds items by meaning (plain-language queries); ask_library answers a question from saved items with citations; related_items finds similar items.
 - get_item returns the archived full content (Markdown) for summarizing or answering questions.
 File everything you save without asking: call list_collections and list_tags once, then pass the best existing collection (nested with "/", create one only when nothing fits; never "Browser bookmarks", "X bookmarks" or "Pinterest", which Trove fills itself), 1-4 short lowercase tags and, when the user gave context, a one-line note. Write collection names, tags, notes and any title you set in English, even if the content or request is in another language. Trove detects the content type itself. Report only what tool results confirm.`;
 
@@ -27,6 +31,7 @@ const brief = (i: Item) => ({
   collection: i.collection,
   tags: i.tags,
   note: i.note || undefined,
+  summary: i.summary || undefined,
   excerpt: i.excerpt ? i.excerpt.slice(0, 240) : undefined,
   author: i.author || undefined,
   favorite: i.favorite || undefined,
@@ -57,8 +62,10 @@ function build(who: Caller) {
         { title: 'Save to Trove', description: 'Save a link or a piece of content (note) to Trove. Returns the saved item and whether it already existed.', inputSchema: saveShape },
         async (args) => {
           try {
-            const r = await save(toSaveInput({ ...args, source: 'Agent' }, who));
+            const input = toSaveInput({ ...args, source: 'Agent' }, who);
+            const r = await save(input);
             invalidateStats();
+            after(() => afterSave(r, input).catch(() => {}));
             return ok({ created: r.created, item: brief(r.item) });
           } catch (e) {
             return fail(e);
@@ -73,7 +80,9 @@ function build(who: Caller) {
           const results = [];
           for (const it of items) {
             try {
-              const r = await save(toSaveInput({ ...it, source: 'Agent' }, who));
+              const input = toSaveInput({ ...it, source: 'Agent' }, who);
+              const r = await save(input);
+              after(() => afterSave(r, input).catch(() => {}));
               results.push({ created: r.created, item: brief(r.item) });
             } catch (e) {
               results.push({ error: (e as Error).message, input: it.url || it.text?.slice(0, 60) });
@@ -119,8 +128,10 @@ function build(who: Caller) {
                   ? { kind: 'url', url: a.file_url, filename: a.filename, contentType: a.content_type }
                   : null;
             if (!source) return fail(new Error('Pass data, file_url or upload'));
-            const r = await saveFile(source, toSaveInput({ title: a.title, note: a.note, tags: a.tags, collection: a.collection, url: a.url, favorite: a.favorite, source: 'Agent' }, who), { description: a.description });
+            const input = toSaveInput({ title: a.title, note: a.note, tags: a.tags, collection: a.collection, url: a.url, favorite: a.favorite, source: 'Agent' }, who);
+            const r = await saveFile(source, input, { description: a.description });
             invalidateStats();
+            after(() => afterSave(r, input).catch(() => {}));
             return ok({ created: r.created, item: brief(r.item) });
           } catch (e) {
             return fail(e);
@@ -180,6 +191,54 @@ function build(who: Caller) {
           try {
             const r = await list({ q: query || '', query: collection ? { collection } : {}, limit: limit || 20, sort, cursor });
             return ok({ items: r.items.map(brief), cursor: r.cursor });
+          } catch (e) {
+            return fail(e);
+          }
+        },
+      );
+
+      server.registerTool(
+        'smart_search',
+        {
+          title: 'Search Trove by meaning',
+          description: 'Hybrid search: keyword matches plus items that mean the same thing (semantic), best first. Use plain-language queries like "how to price a SaaS product". Falls back to keyword search when AI is unavailable.',
+          inputSchema: z.object({ query: z.string(), limit: z.number().int().min(1).max(50).optional() }),
+          annotations: { readOnlyHint: true },
+        },
+        async ({ query, limit }) => {
+          try {
+            const r = await hybridSearch(query, limit || 15);
+            return ok({ mode: r.mode, note: r.note, items: r.items.map(brief) });
+          } catch (e) {
+            return fail(e);
+          }
+        },
+      );
+
+      server.registerTool(
+        'ask_library',
+        {
+          title: 'Ask the library',
+          description: "Answer a question from the user's saved items, with [n] citations and the source items.",
+          inputSchema: z.object({ question: z.string() }),
+          annotations: { readOnlyHint: true },
+        },
+        async ({ question }) => {
+          try {
+            const r = await ask(question);
+            return ok({ answer: r.answer, sources: r.sources.map(brief) });
+          } catch (e) {
+            return fail(e);
+          }
+        },
+      );
+
+      server.registerTool(
+        'related_items',
+        { title: 'Related items', description: 'Items most similar in meaning to a saved item.', inputSchema: z.object({ id: z.string(), limit: z.number().int().min(1).max(20).optional() }), annotations: { readOnlyHint: true } },
+        async ({ id, limit }) => {
+          try {
+            return ok((await related(id, limit || 8)).map((h) => ({ ...brief(h), score: Number(h.score.toFixed(3)) })));
           } catch (e) {
             return fail(e);
           }
@@ -308,7 +367,7 @@ function build(who: Caller) {
         },
       );
     },
-    { serverInfo: { name: 'trove', version: '2.4.0' }, instructions: INSTRUCTIONS },
+    { serverInfo: { name: 'trove', version: '3.0.0' }, instructions: INSTRUCTIONS },
   );
 }
 

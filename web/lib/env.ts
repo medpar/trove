@@ -24,7 +24,8 @@ function read() {
     libraryDb: process.env.TROVE_LIBRARY_DB?.trim() || '',
     password: process.env.TROVE_PASSWORD?.trim() || '',
     sessionSecret: need('TROVE_SESSION_SECRET'),
-    apiKeys: (process.env.TROVE_API_KEYS || '')
+    // TROVE_EXTRA_API_KEYS adds keys without touching the main list (e.g. "Backup:key").
+    apiKeys: [process.env.TROVE_API_KEYS || '', process.env.TROVE_EXTRA_API_KEYS || ''].join(',')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)

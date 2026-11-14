@@ -75,6 +75,10 @@ export type Item = {
   source: string | null;
   via: string;
   notionUrl: string;
+  summary: string;
+  progress: number | null;
+  archive: string | null;
+  snapshot: boolean;
   stats?: Record<string, number | null>;
 };
 
@@ -121,6 +125,10 @@ export function toItem(page: any): Item {
     source: sel(pr[L.source]),
     via: txt(pr[L.via]),
     notionUrl: page.url,
+    summary: txt(pr[L.summary]),
+    progress: pr[L.progress]?.number ?? null,
+    archive: pr[L.archive]?.url || null,
+    snapshot: (pr[L.snapshot]?.files || []).length > 0,
     ...(x ? { stats: { likes: pr[L.likes]?.number ?? null, reposts: pr[L.reposts]?.number ?? null, views: pr[L.views]?.number ?? null, thread: pr[L.threadLen]?.number ?? null } } : {}),
   };
 }
@@ -130,7 +138,7 @@ export function toItem(page: any): Item {
 type F = Record<string, unknown>;
 
 function textOr(word: string, props: Record<string, any>): F {
-  const fields = [L.title, L.text, L.description, L.note, L.author, L.domain, ...(props[L.handle] ? [L.handle] : [])];
+  const fields = [L.title, L.text, L.description, L.note, L.author, L.domain, ...(props[L.handle] ? [L.handle] : []), ...(props[L.summary] ? [L.summary] : []), ...(props[L.fulltext] ? [L.fulltext] : [])];
   const ors: F[] = fields.map((p) => ({ property: p, rich_text: { contains: word } }));
   ors.push({ property: L.url, url: { contains: word } });
   return { or: ors };
@@ -249,8 +257,18 @@ export async function list(opts: ListOptions = {}): Promise<{ items: Item[]; cur
   const filter = buildFilter(q, await schemaOf());
   const c = dec(opts.cursor);
   if (filter === null || c.l === null) return { items: [], cursor: null };
-  const res = await notion().query(env().libraryDs, clean({ filter, sorts: sortsFor(sort), page_size: limit, start_cursor: c.l || undefined }));
+  const res = await notion().query(env().libraryDs, clean({ filter, sorts: sortsFor(sort), page_size: limit, start_cursor: c.l || undefined }), await lightProps());
   return { items: res.results.map(toItem), cursor: res.has_more ? enc({ l: res.next_cursor }) : null };
+}
+
+/** Property ids for list queries: everything except the big archive columns (full text, vectors). */
+export async function lightProps(extra: string[] = []): Promise<string[]> {
+  const props = await schemaOf();
+  const heavy = new Set([L.fulltext, L.embedding].filter((n) => !extra.includes(n)));
+  return Object.entries(props)
+    .filter(([name]) => !heavy.has(name))
+    .map(([, p]: [string, any]) => p.id)
+    .filter(Boolean);
 }
 
 function clean<T extends Record<string, unknown>>(o: T): T {
@@ -313,6 +331,8 @@ export type SaveInput = {
   source?: string;
   via?: string;
   archive?: boolean;
+  /** false: never let AI pick a collection or tags for this save. */
+  autofile?: boolean;
 };
 
 export type SaveResult = { item: Item; created: boolean };
@@ -334,6 +354,9 @@ const rt = (s: string | undefined | null, max = 1900) => {
   if (cur && out.length < 100) out.push({ type: 'text', text: { content: cur } });
   return out;
 };
+/** Full text kept for search (Notion allows 100 text runs of 2,000 characters per property). */
+export const FULLTEXT_MAX = 180000;
+export { rt };
 const selName = (s: string) => s.replace(/,/g, ' ').trim().slice(0, 90);
 const uniq = (a: string[]) => [...new Set(a.map(selName).filter(Boolean))];
 
@@ -457,6 +480,7 @@ async function createLibraryPage(url: string, key: string, e: Extracted, input: 
     [L.platform]: { select: { name: e.platform } },
     [L.description]: { rich_text: rt(e.description) },
     [L.text]: { rich_text: rt([e.title, e.description, e.text].filter(Boolean).join('\n').slice(0, 12000)) },
+    ...(e.text && e.text.length > 12000 ? { [L.fulltext]: { rich_text: rt(e.text.slice(0, FULLTEXT_MAX)) } } : {}),
     [L.author]: { rich_text: rt(e.author) },
     [L.site]: { rich_text: rt(e.siteName) },
     [L.highlights]: { number: input.highlight ? 1 : 0 },
@@ -530,9 +554,10 @@ async function saveNote(input: SaveInput): Promise<SaveResult> {
   const props: Record<string, unknown> = {
     [L.title]: { title: rt(input.title || plain(firstLine).slice(0, 120)) },
     [L.key]: { rich_text: rt(key) },
-    [L.type]: { select: { name: 'Note' } },
-    [L.platform]: { select: { name: 'Web' } },
+    [L.type]: { select: { name: input.type === 'Article' ? 'Article' : 'Note' } },
+    [L.platform]: { select: { name: input.source === 'Email' ? 'Email' : 'Web' } },
     [L.text]: { rich_text: rt(text.slice(0, 12000)) },
+    ...(text.length > 12000 ? { [L.fulltext]: { rich_text: rt(text.slice(0, FULLTEXT_MAX)) } } : {}),
     [L.description]: { rich_text: rt(plain(text).slice(0, 300)) },
     [L.words]: { number: (text.match(/\S+/g) || []).length },
     ...baseProps({ ...input, note: input.note }),
@@ -540,7 +565,7 @@ async function saveNote(input: SaveInput): Promise<SaveResult> {
   const page = await notion().createPage({
     parent: { type: 'data_source_id', data_source_id: env().libraryDs },
     properties: props,
-    icon: { type: 'emoji', emoji: '📝' },
+    icon: { type: 'emoji', emoji: input.source === 'Email' ? '📧' : input.source === 'Telegram' ? '💬' : '📝' },
     markdown: [text, input.note ? `## Note\n\n${input.note}` : ''].filter(Boolean).join('\n\n'),
   });
   return { item: toItem(page), created: true };
@@ -657,7 +682,7 @@ async function saveTweet(id: string, input: SaveInput): Promise<SaveResult> {
   return { item: toItem(page), created: true };
 }
 
-export type Patch = Partial<{ title: string; tags: string[]; collection: string | null; note: string; favorite: boolean; read: boolean; remind: string | null; url: string }>;
+export type Patch = Partial<{ title: string; tags: string[]; collection: string | null; note: string; favorite: boolean; read: boolean; remind: string | null; url: string; progress: number | null; summary: string }>;
 
 export async function update(id: string, patch: Patch): Promise<Item> {
   const page = await notion().req('GET', `/pages/${id}`);
@@ -670,6 +695,8 @@ export async function update(id: string, patch: Patch): Promise<Item> {
   if (patch.favorite !== undefined) props[T.favorite] = { checkbox: patch.favorite };
   if (patch.read !== undefined) props[T.read] = { checkbox: patch.read };
   if (patch.remind !== undefined) props[L.remind] = { date: patch.remind ? { start: patch.remind } : null };
+  if (patch.progress !== undefined) props[L.progress] = { number: patch.progress === null ? null : Math.max(0, Math.min(100, Math.round(patch.progress))) };
+  if (patch.summary !== undefined) props[L.summary] = { rich_text: rt(patch.summary) };
   if (patch.url !== undefined && isUrl(patch.url)) {
     props[L.url] = { url: patch.url };
     props[L.key] = { rich_text: rt(urlKey(patch.url)) };
@@ -680,6 +707,11 @@ export async function update(id: string, patch: Patch): Promise<Item> {
 
 export async function remove(id: string) {
   await notion().updatePage(id, { in_trash: true });
+}
+
+/** Bring an item back from Notion's trash (undo a delete). */
+export async function restore(id: string) {
+  return toItem(await notion().updatePage(id, { in_trash: false }));
 }
 
 /** Fill in YouTube details later (sent by the extension, which can read YouTube from the user's browser). */
@@ -760,9 +792,23 @@ export type Stats = {
 let statsCache: Stats | null = null;
 let statsPending: Promise<Stats> | null = null;
 
+// A cold instance answers from the last counts saved in Blob (refreshing in the background), so
+// pickers in Telegram and the Shortcuts don't wait for a full scan. Writes in this instance turn it off.
+let blobStatsOk = true;
+
 export async function stats({ fresh = false } = {}): Promise<Stats> {
   if (statsCache && !fresh && Date.now() - statsCache.at < 5 * 60 * 1000) return statsCache;
   if (statsPending) return statsPending;
+  if (!statsCache && !fresh && blobStatsOk) {
+    blobStatsOk = false;
+    const { readState } = await import('./state');
+    const saved = await readState<Stats>('stats.json').catch(() => null);
+    if (saved && Date.now() - saved.at < 6 * 3600e3) {
+      statsCache = saved;
+      void stats({ fresh: true }).catch(() => {});
+      return saved;
+    }
+  }
   statsPending = (async () => {
     const props = await schemaOf();
     const s: Stats = { total: 0, library: 0, x: 0, unsorted: 0, favorites: 0, unread: 0, notes: 0, highlights: 0, broken: 0, reminders: 0, noTags: 0, collections: [], tags: [], types: [], platforms: [], at: Date.now() };
@@ -797,6 +843,7 @@ export async function stats({ fresh = false } = {}): Promise<Stats> {
     s.types = facet(typ);
     s.platforms = facet(plat);
     statsCache = s;
+    import('./state').then(({ writeState, stateReady }) => (stateReady() ? writeState('stats.json', s) : undefined)).catch(() => {});
     return s;
   })().finally(() => {
     statsPending = null;
@@ -808,6 +855,7 @@ export async function stats({ fresh = false } = {}): Promise<Stats> {
 export const invalidateStats = () => {
   statsCache = null;
   schemaReady = null;
+  blobStatsOk = false;
 };
 
 // ---------- link health ----------

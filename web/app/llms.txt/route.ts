@@ -11,7 +11,9 @@ npm install -g github:medpar/trove
 trove login --url ${base} --key <key>        # or set TROVE_URL and TROVE_API_KEY
 trove save <url|text> [-t tags] [-c Collection] [-n note] --json
 trove upload <file…> [-t tags] [-c Collection] [-n note] [--title "…"] [-d "what it shows"] --json   # images, videos, audio, PDFs, up to 1 GB
-trove search "<query>" [-l N] [--unsorted] [--untagged] --json
+trove search "<query>" [-l N] [--unsorted] [--untagged] [--smart] --json   # --smart also matches by meaning
+trove ask "<question>" --json                # answer from saved items, with sources
+trove related <id> --json                    # similar items
 trove get <id> --content --json
 trove update <id…> [--add-tags a,b] [-c Collection] [--read] --json
 trove check <url> --json
@@ -33,13 +35,20 @@ File it without asking: list existing collections and tags first (trove collecti
 - POST ${base}/api/files/uploads  JSON {filename, size, content_type?, sha256?}  -> for files over 4 MB (up to 1 GB): returns {upload, put: {url, headers}}.
     PUT the raw bytes to put.url sending every put.headers entry, then POST /api/files {"upload": "<upload>", title, tags, collection, note}.
     If sha256 matches a file saved before you get {duplicate: true, item} instead and nothing needs uploading.
+- GET  ${base}/api/search?q=plain+language+query  -> hybrid search (keyword + meaning), best first. {items, mode, note}
+- POST ${base}/api/ask  {question}  -> {answer (Markdown, [n] citations), sources: Item[]}
+- GET  ${base}/api/items/{id}/related  -> similar items
+- GET  ${base}/api/items/{id}/snapshot  -> the archived copy of the page (HTML)
 - GET  ${base}/api/lookup?url=...  -> which URLs are already saved
 - GET  ${base}/api/stats  -> collections, tags and counts
 - OpenAPI: ${base}/openapi.json
 
 ## MCP (optional)
 - Streamable HTTP server: ${base}/api/mcp with the same bearer key
-- Tools: save, save_many, save_file, create_upload, search, get_item, update_item, add_highlight, delete_item, check_saved, list_collections, list_tags, rename
+- Tools: save, save_many, save_file, create_upload, search, smart_search, ask_library, related_items, get_item, update_item, add_highlight, delete_item, check_saved, list_collections, list_tags, rename
+
+## What Trove does after a save
+New items without a collection are filed by AI into existing collections and tags (pass autofile: false to prevent it), get a one-line summary, are indexed for search by meaning, images and PDFs are read with OCR, and web pages get a full snapshot plus a Wayback Machine capture.
 
 ## Examples
 curl -X POST ${base}/api/items -H "Authorization: Bearer $TROVE_API_KEY" -H "content-type: application/json" -d '{"url":"https://example.com/post","tags":["ai"],"note":"why it matters"}'

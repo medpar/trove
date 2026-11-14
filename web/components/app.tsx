@@ -1,9 +1,11 @@
 'use client';
-import { ArrowDownUp, Bot, CheckCircle2, Copy, ExternalLink, FolderInput, Heart, Image as ImageIcon, Inbox, Keyboard, LayoutGrid, List, Menu as MenuIcon, Plus, Rows3, Search, SearchX, Tag, Trash2, TriangleAlert, X } from 'lucide-react';
+import { ArrowDownUp, Bot, CheckCircle2, Copy, ExternalLink, FolderInput, Heart, Image as ImageIcon, Inbox, Keyboard, LayoutGrid, List, Menu as MenuIcon, Plus, Rows3, Search, SearchX, Sparkles, Tag, Trash2, TriangleAlert, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AddDialog } from './add';
 import { AgentPanel } from './agent';
-import { api, patchItem, refreshAll, removeLocal, useItems, useStats } from './api';
+import { AskPanel } from './ask';
+import { FeedsView } from './feeds';
+import { api, isSmartQuery, patchItem, refreshAll, removeLocal, useItems, useSmartSearch, useStats } from './api';
 import { Detail } from './detail';
 import { Items, Skeletons } from './items';
 import { Palette } from './palette';
@@ -59,6 +61,8 @@ function titleFor(s: Scope): { title: string; plain: string } {
       return t(plural(s.value || ''));
     case 'source':
       return s.value === 'x' ? t('X bookmarks') : t('Library');
+    case 'feeds':
+      return t('Feeds');
   }
 }
 
@@ -81,6 +85,8 @@ export default function TroveApp() {
   const [bulkDialog, setBulkDialog] = useState<'move' | 'tag' | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [agent, setAgent] = useState<string | null>(null);
+  const [askQ, setAskQ] = useState<string | null>(null);
+  const [smart, setSmart] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -106,6 +112,10 @@ export default function TroveApp() {
     setTheme(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
     if (p.get('agent')) setAgent(p.get('agent') === '1' ? '' : p.get('agent'));
     if (p.get('add')) setAdding(p.get('add') === '1' ? '' : p.get('add'));
+    if (p.get('ask')) setAskQ(p.get('ask') === '1' ? '' : p.get('ask'));
+    try {
+      if (localStorage.getItem('trove-smart') === 'off') setSmart(false);
+    } catch { /* private mode */ }
     setReady(true);
   }, []);
 
@@ -128,19 +138,23 @@ export default function TroveApp() {
 
   // ---- data ----
   const { data: stats } = useStats();
-  const list = useItems(scope, q, sort);
-  const items = useMemo(() => list.items.filter((i) => !pendingDeletes.current.has(i.id)), [list.items]);
+  const feedsView = scope.kind === 'feeds';
+  const smartOn = smart && scope.kind === 'all' && isSmartQuery(q);
+  const smartRes = useSmartSearch(q, smartOn);
+  const list = useItems(scope, q, sort, !smartOn && !feedsView);
+  const source = smartOn ? smartRes.data?.items || [] : list.items;
+  const items = useMemo(() => source.filter((i) => !pendingDeletes.current.has(i.id)), [source]);
   const selectedItem = items.find((i) => i.id === selected);
 
   useEffect(() => {
     const el = sentinel.current;
     if (!el) return;
     const io = new IntersectionObserver((e) => {
-      if (e[0].isIntersecting && !list.done && !list.isValidating) list.setSize(list.size + 1);
+      if (e[0].isIntersecting && !smartOn && !list.done && !list.isValidating) list.setSize(list.size + 1);
     }, { rootMargin: '900px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [list.done, list.isValidating, list.size, list.setSize, items.length]);
+  }, [list.done, list.isValidating, list.size, list.setSize, items.length, smartOn]);
 
   // ---- actions ----
   const changeScope = useCallback((s: Scope) => {
@@ -321,7 +335,7 @@ export default function TroveApp() {
         setPalette(true);
         return;
       }
-      if (palette || adding !== null || help || bulkDialog || agent !== null) return;
+      if (palette || adding !== null || help || bulkDialog || agent !== null || askQ !== null) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const idx = items.findIndex((i) => i.id === selected);
       const cur = idx >= 0 ? items[idx] : null;
@@ -391,7 +405,7 @@ export default function TroveApp() {
           break;
       }
     },
-    [items, selected, checked, palette, adding, help, bulkDialog, agent],
+    [items, selected, checked, palette, adding, help, bulkDialog, agent, askQ],
   );
 
   const head = titleFor(scope);
@@ -400,7 +414,16 @@ export default function TroveApp() {
       : scope.kind === 'collection' ? stats?.collections.filter((c) => c.name === scope.value || c.name.startsWith(`${scope.value}/`)).reduce((a, c) => a + c.count, 0) : scope.kind === 'tag' ? stats?.tags.find((c) => c.name === scope.value)?.count
       : scope.kind === 'type' ? stats?.types.find((c) => c.name === scope.value)?.count : scope.kind === 'source' ? (scope.value === 'x' ? stats?.x : stats?.library) : undefined;
 
-  const loading = !list.data && (list.isLoading || list.isValidating);
+  const loading = smartOn ? !smartRes.data && smartRes.isLoading : !list.data && (list.isLoading || list.isValidating);
+  const done = smartOn ? true : list.done;
+  const toggleSmart = () => {
+    setSmart((v) => {
+      try {
+        localStorage.setItem('trove-smart', v ? 'off' : 'on');
+      } catch { /* private mode */ }
+      return !v;
+    });
+  };
 
   return (
     <div className="app">
@@ -417,7 +440,10 @@ export default function TroveApp() {
                 <input
                   ref={searchRef}
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    if (feedsView && e.target.value.trim()) setScope({ kind: 'all' });
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') setQ(input.trim());
                     if (e.key === 'Escape') {
@@ -425,7 +451,7 @@ export default function TroveApp() {
                       setQ('');
                     }
                   }}
-                  placeholder={scope.kind === 'all' ? 'Search your library' : `Search in ${head.plain}`}
+                  placeholder={scope.kind === 'all' ? 'Search by words or meaning' : feedsView ? 'Search your library' : `Search in ${head.plain}`}
                   aria-label="Search"
                   type="search"
                   enterKeyHint="search"
@@ -439,16 +465,16 @@ export default function TroveApp() {
                 )}
               </label>
               <span className="spacer" />
-              <div className="seg hide-mobile" role="group" aria-label="Layout">
+              {!feedsView && <div className="seg hide-mobile" role="group" aria-label="Layout">
                 {([['cards', LayoutGrid, 'Cards'], ['list', List, 'List'], ['headlines', Rows3, 'Headlines'], ['mood', ImageIcon, 'Moodboard']] as const).map(([v, I, label]) => (
                   <button key={v} className={view === v ? 'on' : ''} onClick={() => changeView(v)} aria-label={label} aria-pressed={view === v} title={label}>
                     <I size={16} />
                   </button>
                 ))}
-              </div>
-              <button className="icon-btn" aria-label="Sort" title="Sort" onClick={(e) => menu.open(e, SORTS.map((s) => ({ label: s.label, on: sort === s.id, run: () => setSort(s.id) })), 'right')}>
+              </div>}
+              {!feedsView && <button className="icon-btn" aria-label="Sort" title="Sort" onClick={(e) => menu.open(e, SORTS.map((s) => ({ label: s.label, on: sort === s.id, run: () => setSort(s.id) })), 'right')}>
                 <ArrowDownUp size={17} />
-              </button>
+              </button>}
               <button className="btn hide-mobile" onClick={() => setAgent('')}>
                 <Bot size={15} /> Agent
               </button>
@@ -460,14 +486,14 @@ export default function TroveApp() {
 
           <div className="page-head">
             <h1 className="page-title">{head.title}</h1>
-            <span className="page-count">{count !== undefined ? count.toLocaleString() : items.length ? `${items.length}${list.done ? '' : '+'}` : ''}</span>
+            <span className="page-count">{feedsView ? '' : smartOn ? (items.length ? `${items.length} best matches` : '') : count !== undefined && !q ? count.toLocaleString() : items.length ? `${items.length}${done ? '' : '+'}` : ''}</span>
             <span className="spacer" />
             <button className="icon-btn hide-mobile" aria-label="Keyboard shortcuts" title="Keyboard shortcuts (?)" onClick={() => setHelp(true)}>
               <Keyboard size={17} />
             </button>
           </div>
 
-          {(q || scope.kind !== 'all') && (
+          {(q || (scope.kind !== 'all' && !feedsView)) && (
             <div className="filters">
               {scope.kind !== 'all' && (
                 <span className="filter-chip">
@@ -485,19 +511,31 @@ export default function TroveApp() {
                   </button>
                 </span>
               )}
+              {q && scope.kind === 'all' && isSmartQuery(q) && (
+                <button className={`filter-chip toggle ${smartOn ? 'on' : ''}`} onClick={toggleSmart} aria-pressed={smartOn} title={smartOn ? 'Showing matches by meaning and words. Click for exact word matches only.' : 'Showing exact word matches. Click to also match by meaning.'}>
+                  <Sparkles size={12} /> {smartOn ? (smartRes.data?.mode === 'keyword' ? 'Smart search unavailable' : 'Smart search') : 'Exact words'}
+                </button>
+              )}
+              {q && (
+                <button className="filter-chip toggle" onClick={() => setAskQ(q)} title="Get an answer from your library">
+                  <Bot size={12} /> Ask Trove
+                </button>
+              )}
             </div>
           )}
 
           <section className="items" aria-busy={loading} aria-label="Items">
-            {loading ? (
+            {feedsView ? (
+              <FeedsView stats={stats} onOpen={(id) => setSelected(id)} />
+            ) : loading ? (
               <Skeletons view={view} />
-            ) : list.error && !items.length ? (
+            ) : (smartOn ? smartRes.error : list.error) && !items.length ? (
               <div className="empty" role="alert">
                 <span className="empty-icon"><TriangleAlert size={20} /></span>
                 <h2>Couldn’t load your library</h2>
-                <p>{String(list.error.message || list.error)}. Check your connection, then try again.</p>
+                <p>{String((smartOn ? smartRes.error : list.error)?.message || 'Unknown error')}. Check your connection, then try again.</p>
                 <div className="actions">
-                  <button className="btn" onClick={() => list.mutate()}>Try again</button>
+                  <button className="btn" onClick={() => (smartOn ? smartRes.mutate() : list.mutate())}>Try again</button>
                 </div>
               </div>
             ) : !items.length ? (
@@ -532,14 +570,14 @@ export default function TroveApp() {
                 onTag={(t) => changeScope({ kind: 'tag', value: t })}
               />
             )}
-            <div ref={sentinel} style={{ height: 1 }} />
-            {!loading && items.length > 0 && !list.done && <div className="loading-more"><span className="spinner" aria-label="Loading more" /></div>}
-            {!loading && list.done && items.length > 12 && <p className="end-note">{items.length.toLocaleString()} items</p>}
+            {!feedsView && <div ref={sentinel} style={{ height: 1 }} />}
+            {!feedsView && !loading && items.length > 0 && !done && <div className="loading-more"><span className="spinner" aria-label="Loading more" /></div>}
+            {!feedsView && !loading && done && items.length > 12 && <p className="end-note">{items.length.toLocaleString()} items</p>}
           </section>
         </div>
       </main>
 
-      {selected && <Detail id={selected} seed={selectedItem} stats={stats} onClose={() => setSelected(null)} onDelete={(it) => del([it])} onAsk={(it) => setAgent(`About “${it.title}” (id ${it.id}): `)} />}
+      {selected && <Detail id={selected} seed={selectedItem} stats={stats} onClose={() => setSelected(null)} onDelete={(it) => del([it])} onAsk={(it) => setAgent(`About “${it.title}” (id ${it.id}): `)} onOpen={(id) => setSelected(id)} />}
 
       {checked.size > 0 && (
         <div className="bulk" role="toolbar" aria-label="Selection">
@@ -567,6 +605,7 @@ export default function TroveApp() {
         />
       )}
       {agent !== null && <AgentPanel initial={agent} onClose={() => setAgent(null)} onOpen={(id) => setSelected(id)} />}
+      {askQ !== null && <AskPanel initial={askQ} onClose={() => setAskQ(null)} onOpen={(id) => { setAskQ(null); setSelected(id); }} />}
       {palette && (
         <Palette
           stats={stats}
@@ -575,6 +614,7 @@ export default function TroveApp() {
           onOpen={(it) => setSelected(it.id)}
           onAdd={(t) => setAdding(t || '')}
           onAgent={(t) => setAgent(t || '')}
+          onAsk={(t) => setAskQ(t || '')}
           onView={changeView}
           onTheme={cycleTheme}
           onSearch={(term) => {

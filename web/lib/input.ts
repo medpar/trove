@@ -12,6 +12,8 @@ function sourceFor(who: Caller, explicit?: string) {
   if (who.kind === 'session') return 'Web app';
   if (/shortcut|ios|mac/i.test(who.via)) return 'Shortcut';
   if (/extension|brave|chrome/i.test(who.via)) return 'Extension';
+  if (/raycast/i.test(who.via)) return 'Raycast';
+  if (/telegram/i.test(who.via)) return 'Telegram';
   return 'Agent';
 }
 
@@ -34,6 +36,7 @@ export function toSaveInput(raw: any, who: Caller): SaveInput {
     source: sourceFor(who, str(r.source)),
     via: str(r.via) || (who.kind === 'key' ? who.via : undefined),
     archive: r.archive === false || r.archive === 'false' ? false : undefined,
+    autofile: r.autofile === false || r.autofile === 'false' ? false : undefined,
   };
 }
 

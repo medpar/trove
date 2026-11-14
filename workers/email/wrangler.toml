@@ -1,0 +1,8 @@
+name = "trove-email"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+
+[vars]
+TROVE_URL = "https://trove.mariomedpar.com"
+# TROVE_EMAIL_SECRET is a secret: wrangler secret put TROVE_EMAIL_SECRET

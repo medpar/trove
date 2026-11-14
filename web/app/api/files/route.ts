@@ -1,4 +1,6 @@
+import { after } from 'next/server';
 import { guarded, json } from '@/lib/auth';
+import { afterSave } from '@/lib/enrich';
 import { readFileRequest, saveFile } from '@/lib/files';
 import { toSaveInput } from '@/lib/input';
 import { invalidateStats } from '@/lib/store';
@@ -15,7 +17,9 @@ export const maxDuration = 300;
  */
 export const POST = guarded(async (req, who) => {
   const { fields, source, options } = await readFileRequest(req);
-  const r = await saveFile(source, toSaveInput(fields, who), options);
+  const input = toSaveInput(fields, who);
+  const r = await saveFile(source, input, options);
   invalidateStats();
+  after(() => afterSave(r, input).catch((e) => console.error('enrich', e)));
   return json(r, { status: r.created ? 201 : 200 });
 });

@@ -79,6 +79,27 @@ export function Reader({ markdown, highlights = [], note }: { markdown: string; 
   return <article className="reader" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
+/** Highlights with the note written under each quote, if any. */
+export function highlightEntries(md: string | null | undefined): { text: string; note?: string }[] {
+  if (!md) return [];
+  const m = /^#{1,3}\s+Highlights\s*$([\s\S]*)/m.exec(md);
+  if (!m) return [];
+  const out: { text: string; note?: string }[] = [];
+  for (const block of m[1].split(/\n{2,}/)) {
+    const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (!lines.length) continue;
+    if (lines[0].startsWith('>')) {
+      const quote = lines.filter((l) => l.startsWith('>')).map((l) => l.replace(/^>\s?/, '')).join(' ').trim();
+      const rest = lines.filter((l) => !l.startsWith('>')).join(' ').trim();
+      if (quote) out.push({ text: quote, ...(rest ? { note: rest } : {}) });
+    } else if (out.length && !/^#/.test(lines[0])) {
+      const last = out[out.length - 1];
+      last.note = [last.note, lines.join(' ')].filter(Boolean).join(' ');
+    }
+  }
+  return out;
+}
+
 /** Pull highlight quotes out of the archived markdown ("## Highlights" section). */
 export function highlightsOf(md: string | null | undefined): string[] {
   if (!md) return [];

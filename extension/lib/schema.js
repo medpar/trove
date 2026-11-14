@@ -11,6 +11,9 @@ export const L = {
   saved: 'Saved', updated: 'Updated', favorite: 'Favorite', read: 'Read', cover: 'Cover', highlights: 'Highlights', words: 'Words',
   readingTime: 'Reading time', duration: 'Duration', lang: 'Language', source: 'Source', via: 'Via', status: 'Status', checked: 'Checked',
   remind: 'Remind', media: 'Media',
+  // AI, archive and reading (Trove 3)
+  summary: 'Summary', fulltext: 'Full text', embedding: 'Embedding', progress: 'Progress', snapshot: 'Snapshot', archive: 'Archive',
+  enriched: 'Enriched',
   // X bookmarks
   handle: 'Handle', postId: 'Post ID', postKind: 'Post kind', bookmarked: 'Bookmarked', unroll: 'Unroll thread', threadLen: 'Thread length',
   likes: 'Likes', reposts: 'Reposts', replies: 'Replies', quotes: 'Quotes', bookmarks: 'Bookmarks', views: 'Views', links: 'Links',
@@ -74,8 +77,8 @@ export const TYPE_OPTIONS = [
   opt('Long post', 'default'),
 ];
 
-export const SOURCES = ['Web app', 'Extension', 'Agent', 'API', 'Browser bookmarks', 'Import', 'Share', 'Bookmarklet', 'Shortcut', 'Bookmark', 'Manual', 'Pinterest'];
-const SOURCE_COLORS = ['blue', 'purple', 'orange', 'gray', 'yellow', 'brown', 'green', 'pink', 'red', 'blue', 'green', 'red'];
+export const SOURCES = ['Web app', 'Extension', 'Agent', 'API', 'Browser bookmarks', 'Import', 'Share', 'Bookmarklet', 'Shortcut', 'Bookmark', 'Manual', 'Pinterest', 'Telegram', 'Email', 'Feed', 'Raycast'];
+const SOURCE_COLORS = ['blue', 'purple', 'orange', 'gray', 'yellow', 'brown', 'green', 'pink', 'red', 'blue', 'green', 'red', 'blue', 'yellow', 'orange', 'pink'];
 
 /** Collections Trove files things into by itself. Agents never use these for anything else. */
 export const X_COLLECTION = 'X bookmarks';
@@ -118,6 +121,13 @@ export function librarySchema() {
     [L.checked]: { date: {} },
     [L.remind]: { date: {} },
     [L.media]: { files: {} },
+    [L.summary]: { rich_text: {} },
+    [L.fulltext]: { rich_text: {} },
+    [L.embedding]: { rich_text: {} },
+    [L.progress]: num,
+    [L.snapshot]: { files: {} },
+    [L.archive]: { url: {} },
+    [L.enriched]: { date: {} },
     // X bookmarks
     [L.handle]: { rich_text: {} },
     [L.postId]: { rich_text: {} },

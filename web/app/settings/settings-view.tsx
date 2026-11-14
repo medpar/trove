@@ -1,11 +1,28 @@
 'use client';
-import { ArrowLeft, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Link2, LogOut, MonitorSmartphone, Puzzle, Smartphone, Upload, Wrench } from 'lucide-react';
+import { ArrowLeft, Command, Copy, Download, ExternalLink, Eye, EyeOff, KeyRound, Landmark, Link2, LogOut, Mail, MessageCircle, MonitorSmartphone, Puzzle, Rss, Smartphone, Sparkles, Upload, Wrench } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { api, refreshAll } from '@/components/api';
 import { CodeBox as Code, useToast } from '@/components/ui';
 
-type Me = { publicUrl: string; notion: { library: string }; apiKeys: { name: string; key: string }[]; cron: boolean };
+type Me = {
+  publicUrl: string;
+  notion: { library: string };
+  apiKeys: { name: string; key: string }[];
+  cron: boolean;
+  telegram: { configured: boolean; bot?: string | null };
+  email: { configured: boolean; address?: string | null };
+  ai: { enabled: boolean; paused: string | null; models: Record<string, string> };
+  storage: boolean;
+  backup: string | null;
+};
+
+const SHORTCUTS = [
+  { file: 'Save to Trove.shortcut', name: 'Save to Trove', what: 'Share sheet in every app: links, pages, text, photos, PDFs and files. Saves instantly.' },
+  { file: 'Save to Trove with Details.shortcut', name: 'Save to Trove with Details', what: 'Pick a collection, add tags and a note before saving.' },
+  { file: 'Trove Quick Save.shortcut', name: 'Trove Quick Save', what: 'Saves whatever is on the clipboard. Put it on the Action Button, Back Tap, Control Center or a Mac keyboard shortcut.' },
+  { file: 'Trove Note.shortcut', name: 'Trove Note', what: 'Dictate or type a thought. Works with Siri and on Apple Watch.' },
+];
 
 // ---------- import parsers ----------
 
@@ -93,6 +110,28 @@ export default function SettingsView() {
   const [imp, setImp] = useState<{ total: number; done: number; saved: number; errors: number; running: boolean } | null>(null);
   const [quick, setQuick] = useState(true);
   const [health, setHealth] = useState<string>('');
+  const [backfill, setBackfill] = useState<{ done: number; running: boolean; note?: string } | null>(null);
+  const [tgStatus, setTgStatus] = useState<string>('');
+
+  const runBackfill = async () => {
+    setBackfill({ done: 0, running: true });
+    let done = 0;
+    for (let i = 0; i < 200; i++) {
+      try {
+        const r = await api<{ done: number; remaining: boolean; errors: string[] }>('/api/enrich', { method: 'POST', json: { pending: true, limit: 12 } });
+        done += r.done;
+        setBackfill({ done, running: true });
+        if (!r.remaining || (!r.done && r.errors.length)) {
+          setBackfill({ done, running: false, note: !r.done && r.errors[0] ? r.errors[0] : undefined });
+          break;
+        }
+      } catch (e: any) {
+        setBackfill({ done, running: false, note: e.message });
+        break;
+      }
+    }
+    refreshAll();
+  };
   const bookmarklet = useRef<HTMLAnchorElement>(null);
   const [origin, setOrigin] = useState('');
   useEffect(() => setOrigin(location.origin), []);
@@ -147,14 +186,72 @@ export default function SettingsView() {
         <h2>Save from anywhere</h2>
         <div className="cards-2">
           <div className="mini-card">
+            <h3><MessageCircle size={16} /> Telegram</h3>
+            <p>Send or forward anything to your bot: links, text, photos, videos, voice notes, files. Use <code>#tags</code>, <code>@Collection</code> and <code>!fav</code>; tap the buttons to file it. On iPhone, iPad and Mac, Share → Telegram → Trove works from every app.</p>
+            {me?.telegram.configured ? (
+              <div className="row-actions-inline">
+                {me.telegram.bot && <a className="btn primary" href={`https://t.me/${me.telegram.bot}`} target="_blank" rel="noreferrer"><MessageCircle size={15} /> Open @{me.telegram.bot}</a>}
+                <button
+                  className="btn"
+                  onClick={async () => {
+                    setTgStatus('Checking…');
+                    try {
+                      const r = await api<{ webhook: string | null; lastError: string | null; inline: boolean; guest: boolean }>('/api/telegram/setup', { method: 'POST' });
+                      setTgStatus(r.lastError ? `Webhook error: ${r.lastError}` : `Connected${r.inline ? ' · inline search on' : ''}${r.guest ? ' · works in any chat' : ''}`);
+                    } catch (e: any) {
+                      setTgStatus(`Couldn’t connect: ${e.message}`);
+                    }
+                  }}
+                >
+                  <Wrench size={15} /> Reconnect
+                </button>
+                <span className="muted" role="status">{tgStatus}</span>
+              </div>
+            ) : (
+              <p className="field-hint">Set <code>TELEGRAM_BOT_TOKEN</code>, <code>TELEGRAM_WEBHOOK_SECRET</code> and <code>TELEGRAM_ALLOWED_USERS</code>, then press Reconnect.</p>
+            )}
+          </div>
+          <div className="mini-card">
+            <h3><Mail size={16} /> Email</h3>
+            {me?.email.configured && me.email.address ? (
+              <>
+                <p>Email or forward to your Trove address: links are saved as links, newsletters as articles, attachments as files. Put <code>#tags</code> or <code>@Collection</code> in the subject.</p>
+                <div className="row-actions-inline">
+                  <code className="mono pill">{me.email.address}</code>
+                  <button className="icon-btn sm" aria-label="Copy email address" onClick={() => { navigator.clipboard.writeText(me.email.address!); toast.push({ text: 'Address copied' }); }}><Copy size={15} /></button>
+                </div>
+              </>
+            ) : (
+              <p>Forward newsletters and links to a private address. Needs a Cloudflare Email Routing rule pointing at the trove-email worker (see README).</p>
+            )}
+          </div>
+          <div className="mini-card wide">
+            <h3><Smartphone size={16} /> iPhone, iPad and Mac shortcuts</h3>
+            <p>Install on any device; they sync through iCloud. Each asks for an API key once.</p>
+            <div className="shortcut-list">
+              {SHORTCUTS.map((sc) => (
+                <a key={sc.file} className="shortcut-row" href={`/shortcuts/${encodeURIComponent(sc.file)}`}>
+                  <Download size={15} />
+                  <span><strong>{sc.name}</strong><span className="sub">{sc.what}</span></span>
+                </a>
+              ))}
+            </div>
+            <p className="field-hint">Action Button: Settings → Action Button → Shortcut → Trove Quick Save. Back Tap: Settings → Accessibility → Touch → Back Tap. Mac: Shortcuts → Trove Quick Save → ⓘ → Add Keyboard Shortcut.</p>
+          </div>
+          <div className="mini-card">
             <h3><Puzzle size={16} /> Browser extension</h3>
-            <p>Brave, Chrome, Edge and Arc on macOS, Windows and Linux. Save the page you’re on, links, images and selections, and keep your browser bookmarks, X bookmarks and Pinterest saves in sync, each in its own collection.</p>
+            <p>Brave, Chrome, Edge and Arc. Save the page you’re on (logged-in pages are archived too), links, images and selections, and keep browser bookmarks, X bookmarks and Pinterest in sync.</p>
             <a className="btn" href="https://github.com/medpar/trove/releases/latest" target="_blank" rel="noreferrer"><Download size={15} /> Download</a>
           </div>
           <div className="mini-card">
-            <h3><Smartphone size={16} /> iPhone, iPad and Mac</h3>
-            <p>The Save to Trove shortcut adds Trove to the Share sheet in every app and to the macOS Share menu. It asks for an API key once.</p>
-            <a className="btn" href="/trove.shortcut"><Download size={15} /> Get the shortcut</a>
+            <h3><Command size={16} /> Raycast</h3>
+            <p>Save the front tab or the clipboard with a hotkey, search by meaning with previews, and ask your library from anywhere on your Mac.</p>
+            <Code>{`cd raycast && npm install && npm run dev`}</Code>
+          </div>
+          <div className="mini-card">
+            <h3><Rss size={16} /> Feeds and newsletters</h3>
+            <p>Follow blogs, Substacks and YouTube channels. Posts wait in Feeds until you save them, or auto-save into a collection.</p>
+            <a className="btn" href="/?s=feeds"><Rss size={15} /> Open Feeds</a>
           </div>
           <div className="mini-card">
             <h3><MonitorSmartphone size={16} /> Install the app</h3>
@@ -167,6 +264,27 @@ export default function SettingsView() {
               Save to Trove
             </a>
           </div>
+        </div>
+      </section>
+
+      <section>
+        <h2>AI and web archive</h2>
+        <p>New saves are filed into your collections and tags, get a one-line summary and are indexed for search by meaning. Images and PDFs are read with OCR so their text is searchable. Every web page gets a full snapshot in your Notion and a Wayback Machine copy.</p>
+        <div className="status-list">
+          <div className="status-row">
+            <Sparkles size={16} />
+            <span><strong>AI</strong><span className="sub">{!me ? '…' : !me.ai.enabled ? 'Turned off (TROVE_AI=off)' : me.ai.paused ? `Paused: ${me.ai.paused}` : `On · ${me.ai.models.text}, OCR ${me.ai.models.vision}`}</span></span>
+          </div>
+          <div className="status-row">
+            <Landmark size={16} />
+            <span><strong>Web archive</strong><span className="sub">Page snapshots in Notion, plus the Wayback Machine</span></span>
+          </div>
+        </div>
+        <div className="row-actions-inline">
+          <button className="btn" onClick={runBackfill} disabled={backfill?.running}>
+            {backfill?.running ? <span className="spinner" /> : <Sparkles size={15} />} Process the rest of the library
+          </button>
+          <span className="muted num" role="status">{backfill ? `${backfill.done.toLocaleString()} items processed${backfill.running ? '…' : backfill.note ? ` · ${backfill.note}` : ' · Done'}` : 'Summaries, OCR, search index and archive for items saved before, in batches. A daily job does this too.'}</span>
         </div>
       </section>
 
@@ -243,6 +361,16 @@ export default function SettingsView() {
           ))}
         </div>
       </section>
+
+      {me?.backup && (
+        <section>
+          <h2>Backup</h2>
+          <p>Every night your whole library is exported as Markdown (one file per item, with frontmatter) and JSON to a private GitHub repository.</p>
+          <div className="row-actions-inline">
+            <a className="btn" href={`https://github.com/${me.backup}`} target="_blank" rel="noreferrer"><ExternalLink size={15} /> {me.backup}</a>
+          </div>
+        </section>
+      )}
 
       <section>
         <h2>Library health</h2>

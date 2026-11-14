@@ -8,3 +8,6 @@ extension/config.local.json
 .env*
 .cloudflare/
 .claude/
+
+# Wrangler local state
+.wrangler/

@@ -65,11 +65,11 @@ export function listKey(scope: Scope, q: string, sort: Sort) {
   return `/api/items?${p}`;
 }
 
-export function useItems(scope: Scope, q: string, sort: Sort) {
+export function useItems(scope: Scope, q: string, sort: Sort, enabled = true) {
   const base = listKey(scope, q, sort);
   const swr = useSWRInfinite<{ items: Item[]; cursor: string | null }>(
     (index, prev) => {
-      if (prev && !prev.cursor) return null;
+      if (!enabled || (prev && !prev.cursor)) return null;
       return index === 0 ? base : `${base}&cursor=${encodeURIComponent(prev!.cursor!)}`;
     },
     fetcher,
@@ -79,6 +79,18 @@ export function useItems(scope: Scope, q: string, sort: Sort) {
   const items = pages.flatMap((p) => p.items);
   const done = pages.length > 0 && !pages[pages.length - 1].cursor;
   return { ...swr, items, done, base };
+}
+
+const OPERATORS = /(^|\s)(-?#|-\w|\w+:|")/;
+/** Plain-language queries in All items use hybrid (keyword + meaning) search. */
+export const isSmartQuery = (q: string) => q.trim().length > 2 && !OPERATORS.test(q) && !/^https?:\/\//.test(q.trim());
+
+export function useSmartSearch(q: string, enabled: boolean) {
+  return useSWR<{ items: Item[]; mode: 'hybrid' | 'keyword'; note?: string }>(enabled && q ? `/api/search?q=${encodeURIComponent(q)}&limit=48` : null, fetcher, {
+    revalidateOnFocus: false,
+    keepPreviousData: true,
+    dedupingInterval: 30000,
+  });
 }
 
 export function useStats() {

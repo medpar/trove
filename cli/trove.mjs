@@ -4,9 +4,9 @@
 //
 // Config: TROVE_URL + TROVE_API_KEY env vars, or `trove login` (~/.config/trove/config.json).
 
-import { closeSync, createReadStream, openSync, readFileSync, readSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { closeSync, createReadStream, existsSync, openSync, readFileSync, readSync, rmSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
@@ -29,6 +29,9 @@ Usage
   trove search [query…]                Search (newest first). Syntax: words "phrase" -word #tag
       -l, --limit N   --sort newest|oldest|title|published      type:video site:x.com is:fav is:unread
       -c, --collection Name   --unsorted   --untagged            created:>2025-01 type:x (X bookmarks)
+      --smart                Also match by meaning (hybrid semantic search)
+  trove ask "<question>"               Answer from your saved items, with sources
+  trove related <id>                   Items similar in meaning
   trove get <id> [--content]           One item; --content prints the archived Markdown
   trove update <id…> [options]         --title "…"  --tags a,b (replace)  --add-tags a,b  --remove-tags a
                                        -c Name | --unsorted   -n "…"  --fav|--unfav  --read|--unread
@@ -39,6 +42,7 @@ Usage
   trove rename tag|collection <old> <new>   Rename everywhere (merges into <new> if it exists)
   trove open [id]                      Open the web app (or an item)
   trove login [--url URL] [--key KEY]  Store credentials (or set TROVE_URL / TROVE_API_KEY)
+  trove backup <dir> [--full]          Mirror the library to Markdown files + library.json (incremental)
 
 Agent (AI librarian, runs on this computer with your Claude Code or Codex login, no API keys)
   trove agent "<request>"              e.g. "tag everything untagged", "find what I saved about RAG"
@@ -52,7 +56,7 @@ Global: --json (machine-readable output), --help`;
 // ---------- args ----------
 
 const FLAGS = { t: 'tags', c: 'collection', n: 'note', h: 'highlight', l: 'limit', d: 'description' };
-const BOOL = new Set(['json', 'fav', 'read', 'unfav', 'unread', 'quick', 'content', 'unsorted', 'untagged', 'help', 'continue', 'noPoster', 'no-poster']);
+const BOOL = new Set(['json', 'fav', 'read', 'unfav', 'unread', 'quick', 'content', 'unsorted', 'untagged', 'help', 'continue', 'noPoster', 'no-poster', 'smart', 'full']);
 
 function parseArgs(argv) {
   const out = { _: [] };
@@ -323,6 +327,14 @@ async function cmdUpload(a) {
 }
 
 async function cmdSearch(a) {
+  if (a.smart) {
+    const r = await api(`/api/search?${new URLSearchParams({ q: a._.slice(1).join(' '), limit: String(a.limit || 20) })}`);
+    return print(a.json, r, () => {
+      if (r.note) console.log(dim(r.note));
+      if (!r.items.length) return console.log('No matches.');
+      for (const it of r.items) console.log(line(it));
+    });
+  }
   const p = new URLSearchParams({ q: a._.slice(1).join(' '), limit: String(a.limit || 20), sort: a.sort || 'newest' });
   if (a.collection) p.set('collection', a.collection);
   if (a.unsorted) p.set('collection', 'unsorted');
@@ -478,6 +490,104 @@ function cmdOpen(a) {
   console.log(target);
 }
 
+async function cmdAsk(a) {
+  const question = a._.slice(1).join(' ') || (await stdin());
+  if (!question) throw new Error('Usage: trove ask "<question>"');
+  const r = await api('/api/ask', { method: 'POST', body: { question } });
+  print(a.json, r, () => {
+    console.log(r.answer + '\n');
+    r.sources.forEach((it, i) => console.log(`${dim(`[${i + 1}]`)} ${bold(it.title || it.url)} ${dim(it.url || link(it.id))}`));
+  });
+}
+
+async function cmdRelated(a) {
+  const id = a._[1];
+  if (!id) throw new Error('Usage: trove related <id>');
+  const r = await api(`/api/items/${id}/related?limit=${a.limit || 10}`);
+  print(a.json, r, () => (r.items.length ? r.items.forEach((it) => console.log(line(it))) : console.log('Nothing related yet (the item may not be indexed).')));
+}
+
+// ---------- backup ----------
+
+const slug = (s) =>
+  String(s || 'untitled')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, ' ')
+    .trim()
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+    .slice(0, 70) || 'untitled';
+const safeDir = (c) => (c ? c.split('/').map((p) => p.replace(/[<>:"\\|?*\u0000-\u001f]/g, '').trim() || '_').join('/') : '_Unsorted');
+const yaml = (v) => (v === null || v === undefined || v === '' ? '' : JSON.stringify(v));
+
+/** Mirror the whole library into <dir>: library.json plus one Markdown file per item (only changed ones are fetched). */
+async function cmdBackup(a) {
+  const dir = a._[1];
+  if (!dir) throw new Error('Usage: trove backup <dir> [--full]');
+  mkdirSync(dir, { recursive: true });
+  const stateFile = join(dir, '.trove-backup.json');
+  let state = { items: {} };
+  try {
+    if (!a.full) state = JSON.parse(readFileSync(stateFile, 'utf8'));
+  } catch { /* first run */ }
+  const items = [];
+  let cursor = null;
+  do {
+    const r = await api(`/api/items?limit=100&sort=oldest${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+    items.push(...r.items);
+    cursor = r.cursor;
+    if (tty) process.stderr.write(`\rListed ${items.length} items…`);
+  } while (cursor);
+  if (tty) process.stderr.write('\n');
+  writeFileSync(join(dir, 'library.json'), JSON.stringify(items, null, 1) + '\n');
+  const todo = items.filter((it) => a.full || state.items[it.id]?.updated !== it.updated || !existsSync(join(dir, state.items[it.id]?.path || '-')));
+  let done = 0;
+  let failed = 0;
+  let next = 0;
+  const worker = async () => {
+    while (next < todo.length) {
+      const it = todo[next++];
+      try {
+        const r = await api(`/api/items/${it.id}?content=1`);
+        const path = join('items', safeDir(it.collection), `${slug(it.title)}-${it.id.replace(/-/g, '').slice(0, 8)}.md`);
+        const front = {
+          title: it.title, url: it.url, type: it.type, platform: it.platform, collection: it.collection, tags: it.tags, author: it.author,
+          published: it.published, saved: it.created, updated: it.updated, favorite: it.favorite, read: it.read, summary: it.summary,
+          note: it.note, archive: it.archive, notion: it.notionUrl, id: it.id,
+        };
+        const fm = Object.entries(front).filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && !v.length)).map(([k, v]) => `${k}: ${yaml(v)}`).join('\n');
+        const old = state.items[it.id]?.path;
+        if (old && old !== path) rmSync(join(dir, old), { force: true });
+        mkdirSync(join(dir, dirname(path)), { recursive: true });
+        writeFileSync(join(dir, path), `---\n${fm}\n---\n\n# ${it.title || it.url}\n\n${r.markdown || it.excerpt || ''}\n`);
+        state.items[it.id] = { updated: it.updated, path };
+        done++;
+      } catch (e) {
+        failed++;
+        if (!a.json) console.error(`  ${it.id}: ${e.message}`);
+      }
+      if (tty) process.stderr.write(`\rSaved ${done}/${todo.length}…`);
+      if (done % 50 === 0) writeFileSync(stateFile, JSON.stringify(state));
+    }
+  };
+  await Promise.all(Array.from({ length: Number(a.concurrency) || 3 }, worker));
+  // Items deleted from Trove leave the backup too.
+  const live = new Set(items.map((i) => i.id));
+  let removed = 0;
+  for (const [id, v] of Object.entries(state.items)) {
+    if (live.has(id)) continue;
+    rmSync(join(dir, v.path), { force: true });
+    delete state.items[id];
+    removed++;
+  }
+  state.lastRun = new Date().toISOString();
+  writeFileSync(stateFile, JSON.stringify(state));
+  if (tty) process.stderr.write('\n');
+  print(a.json, { items: items.length, written: done, failed, removed }, (r) => console.log(`✓ ${r.items} items · ${r.written} written · ${r.removed} removed${r.failed ? ` · ${r.failed} failed` : ''}`));
+  if (failed) process.exitCode = 1;
+}
+
 async function cmdLogin(a) {
   const current = (() => {
     try {
@@ -516,6 +626,9 @@ const run = {
   tags: (x) => cmdFacets(x, 'tags'),
   open: cmdOpen,
   login: cmdLogin,
+  ask: cmdAsk,
+  related: cmdRelated,
+  backup: cmdBackup,
 }[cmd];
 
 if (!cmd || a.help || cmd === 'help' || !run) {

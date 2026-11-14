@@ -1,5 +1,5 @@
 'use client';
-import { ArrowDown, ArrowRight, ArrowUp, Bot, BookmarkCheck, CornerDownLeft, Folder, Hash, Heart, Image as ImageIcon, Inbox, LayoutGrid, Layers, List, Moon, Plus, Rows3, Search, Settings } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUp, Bot, BookmarkCheck, CornerDownLeft, Folder, Hash, Heart, Image as ImageIcon, Inbox, LayoutGrid, Layers, List, Moon, Plus, Rows3, Rss, Search, Settings, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, timeAgo } from './api';
 import type { Item, Scope, Stats, View } from './types';
@@ -7,13 +7,14 @@ import { Dialog, Favicon } from './ui';
 
 type Cmd = { id: string; group: string; label: string; icon: React.ReactNode; sub?: string; run: () => void };
 
-export function Palette({ stats, onClose, onScope, onOpen, onAdd, onAgent, onView, onTheme, onSearch }: {
+export function Palette({ stats, onClose, onScope, onOpen, onAdd, onAgent, onAsk, onView, onTheme, onSearch }: {
   stats?: Stats;
   onClose: () => void;
   onScope: (s: Scope) => void;
   onOpen: (it: Item) => void;
   onAdd: (text?: string) => void;
   onAgent: (text?: string) => void;
+  onAsk: (text?: string) => void;
   onView: (v: View) => void;
   onTheme: () => void;
   onSearch: (q: string) => void;
@@ -56,11 +57,14 @@ export function Palette({ stats, onClose, onScope, onOpen, onAdd, onAgent, onVie
     if (/^https?:\/\//.test(q.trim())) out.push({ id: 'save-url', group: 'Save', label: `Save ${q.trim()}`, icon: <Plus size={16} />, run: close(() => onAdd(q.trim())) });
     else if (term) {
       out.push({ id: 'search', group: 'Search', label: `Search for “${q.trim()}”`, icon: <ArrowRight size={16} />, run: close(() => onSearch(q.trim())) });
+      out.push({ id: 'ask-lib', group: 'Search', label: `Ask your library: “${q.trim()}”`, icon: <Sparkles size={16} />, run: close(() => onAsk(q.trim())) });
       out.push({ id: 'ask', group: 'Search', label: `Ask the agent: “${q.trim()}”`, icon: <Bot size={16} />, run: close(() => onAgent(q.trim())) });
     }
     const actions: Cmd[] = [
       { id: 'add', group: 'Actions', label: 'Add link or note', sub: 'N', icon: <Plus size={16} />, run: close(() => onAdd()) },
+      { id: 'ask-open', group: 'Actions', label: 'Ask your library', icon: <Sparkles size={16} />, run: close(() => onAsk()) },
       { id: 'agent', group: 'Actions', label: 'Open the agent', icon: <Bot size={16} />, run: close(() => onAgent()) },
+      { id: 'feeds', group: 'Go to', label: 'Feeds', icon: <Rss size={16} />, run: close(() => onScope({ kind: 'feeds' })) },
       { id: 'all', group: 'Go to', label: 'All items', icon: <Layers size={16} />, run: close(() => onScope({ kind: 'all' })) },
       { id: 'unsorted', group: 'Go to', label: 'Unsorted', icon: <Inbox size={16} />, run: close(() => onScope({ kind: 'unsorted' })) },
       { id: 'unread', group: 'Go to', label: 'Read later', icon: <BookmarkCheck size={16} />, run: close(() => onScope({ kind: 'unread' })) },
@@ -78,7 +82,7 @@ export function Palette({ stats, onClose, onScope, onOpen, onAdd, onAgent, onVie
     for (const t of stats?.tags || []) if (term && match(t.name)) out.push({ id: `t-${t.name}`, group: 'Tags', label: `#${t.name}`, sub: String(t.count), icon: <Hash size={16} />, run: close(() => onScope({ kind: 'tag', value: t.name })) });
     for (const it of results) out.push({ id: `i-${it.id}`, group: 'Items', label: it.title || it.url, sub: timeAgo(it.created), icon: <Favicon domain={it.domain} size={16} />, run: close(() => onOpen(it)) });
     return out.slice(0, 60);
-  }, [q, stats, results, onAdd, onAgent, onClose, onOpen, onScope, onSearch, onTheme, onView]);
+  }, [q, stats, results, onAdd, onAgent, onAsk, onClose, onOpen, onScope, onSearch, onTheme, onView]);
 
   useEffect(() => setIdx(0), [q]);
   useEffect(() => {

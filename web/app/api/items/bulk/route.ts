@@ -1,5 +1,6 @@
 import { guarded, json } from '@/lib/auth';
 import { readBody } from '@/lib/input';
+import { forget } from '@/lib/semantic';
 import { getItem, invalidateStats, remove, update } from '@/lib/store';
 
 export const maxDuration = 60;
@@ -38,6 +39,7 @@ export const POST = guarded(async (req) => {
               break;
             case 'delete':
               await remove(id);
+              forget(id);
               break;
             default:
               throw new Error(`Unknown action ${action}`);

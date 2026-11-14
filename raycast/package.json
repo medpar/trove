@@ -1,0 +1,101 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "trove",
+  "title": "Trove",
+  "description": "Save links, tabs, clipboard and notes to your Trove library, search it and ask it questions.",
+  "icon": "icon.png",
+  "author": "medpar",
+  "categories": [
+    "Productivity"
+  ],
+  "license": "MIT",
+  "preferences": [
+    {
+      "name": "troveUrl",
+      "title": "Trove URL",
+      "description": "Where your Trove web app runs.",
+      "type": "textfield",
+      "required": false,
+      "default": "https://trove.mariomedpar.com",
+      "placeholder": "https://trove.mariomedpar.com"
+    },
+    {
+      "name": "apiKey",
+      "title": "API Key",
+      "description": "A Trove API key (one of TROVE_API_KEYS).",
+      "type": "password",
+      "required": true,
+      "placeholder": "Your Trove API key"
+    }
+  ],
+  "commands": [
+    {
+      "name": "save",
+      "title": "Save to Trove",
+      "subtitle": "Trove",
+      "description": "Save the current browser tab (or any URL) with a collection, tags and a note.",
+      "mode": "view"
+    },
+    {
+      "name": "quick-save-tab",
+      "title": "Quick Save Tab",
+      "subtitle": "Trove",
+      "description": "Save the frontmost browser tab to Trove right away.",
+      "mode": "no-view"
+    },
+    {
+      "name": "save-clipboard",
+      "title": "Save Clipboard",
+      "subtitle": "Trove",
+      "description": "Save the URL or text on the clipboard to Trove.",
+      "mode": "no-view"
+    },
+    {
+      "name": "search",
+      "title": "Search Trove",
+      "subtitle": "Trove",
+      "description": "Search your Trove library.",
+      "mode": "view"
+    },
+    {
+      "name": "quick-note",
+      "title": "Quick Note",
+      "subtitle": "Trove",
+      "description": "Write a note and save it to Trove.",
+      "mode": "view"
+    },
+    {
+      "name": "ask",
+      "title": "Ask Trove",
+      "subtitle": "Trove",
+      "description": "Ask a question and get an answer from what you saved, with sources.",
+      "mode": "view",
+      "arguments": [
+        {
+          "name": "question",
+          "placeholder": "Question",
+          "type": "text",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.12.1",
+    "@raycast/utils": "^2.3.3"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.2.0",
+    "@types/node": "26.6.5",
+    "@types/react": "19.3.0",
+    "eslint": "^10.14.0",
+    "prettier": "^3.6.0",
+    "typescript": "^5.9.0"
+  },
+  "scripts": {
+    "build": "ray build",
+    "dev": "ray develop",
+    "fix-lint": "ray lint --fix",
+    "lint": "ray lint"
+  }
+}

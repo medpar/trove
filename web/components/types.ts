@@ -26,6 +26,10 @@ export type Item = {
   source: string | null;
   via: string;
   notionUrl: string;
+  summary?: string;
+  progress?: number | null;
+  archive?: string | null;
+  snapshot?: boolean;
   stats?: Record<string, number | null>;
 };
 
@@ -52,5 +56,5 @@ export type Stats = {
 export type View = 'cards' | 'list' | 'headlines' | 'mood';
 export type Sort = 'newest' | 'oldest' | 'title' | 'title_desc' | 'site' | 'published';
 
-export type ScopeKind = 'all' | 'unsorted' | 'favorites' | 'unread' | 'highlights' | 'notes' | 'reminders' | 'broken' | 'notag' | 'collection' | 'tag' | 'type' | 'source';
+export type ScopeKind = 'all' | 'unsorted' | 'favorites' | 'unread' | 'highlights' | 'notes' | 'reminders' | 'broken' | 'notag' | 'collection' | 'tag' | 'type' | 'source' | 'feeds';
 export type Scope = { kind: ScopeKind; value?: string };

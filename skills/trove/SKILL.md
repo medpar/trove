@@ -59,6 +59,12 @@ MCP clients use the `save_file` tool (`data` base64, `file_url` or `upload`) and
 
 Full reference: `$TROVE_URL/llms.txt` and `$TROVE_URL/openapi.json`. An MCP server is also available at `$TROVE_URL/api/mcp` for clients that prefer MCP.
 
+### Finding things
+- `trove search "<words or operators>" --json` for exact matches and filters (#tag, type:, site:, collection:).
+- `trove search "<plain-language description>" --smart --json` when the user describes something vaguely ("that article about pricing for dev tools").
+- `trove ask "<question>" --json` to answer a question from what they saved; cite the sources it returns.
+- `trove related <id> --json` for more like one item.
+
 ## Rules
 
 1. **Bare link, attachment or "save this": save it right away.** Don't ask for confirmation. An image, video or file the user sends or asks you to keep is uploaded with `trove upload` (or the files API), not saved as a link to a temporary URL.

@@ -11,5 +11,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!api|login|_next|icons|manifest.webmanifest|sw.js|llms.txt|openapi.json|trove.shortcut|favicon.ico|robots.txt|install).*)'],
+  matcher: ['/((?!api|login|_next|icons|manifest.webmanifest|sw.js|llms.txt|openapi.json|trove.shortcut|shortcuts|favicon.ico|robots.txt|install).*)'],
 };

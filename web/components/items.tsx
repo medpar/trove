@@ -140,18 +140,20 @@ const CardView = memo(function CardView({ it, selected, checked, h }: { it: Item
       </article>
     );
   }
-  const showExcerpt = it.excerpt && it.excerpt !== it.title;
+  const blurb = it.summary || (it.excerpt && it.excerpt !== it.title ? it.excerpt : '');
+  const reading = it.progress && it.progress > 3 && it.progress < 97 ? it.progress : 0;
   return (
     <article className={cls} onClick={(e) => open(it, e, h)} data-id={it.id}>
       <div className="cover">
         <Cover it={it} />
         {b && <span className="cover-badge">{b}</span>}
+        {reading > 0 && <span className="cover-progress" aria-label={`${Math.round(reading)}% read`}><span style={{ width: `${reading}%` }} /></span>}
       </div>
       <CheckBox checked={checked} it={it} h={h} />
       <Actions it={it} h={h} />
       <div className="card-body">
         <h3 className="card-title">{it.title || it.url}</h3>
-        {showExcerpt && <p className="card-excerpt">{it.excerpt}</p>}
+        {blurb && <p className={`card-excerpt ${it.summary ? 'is-summary' : ''}`}>{blurb}</p>}
         {it.note && <p className="card-note">{it.note}</p>}
         <div className="footer">
           <Tags it={it} onTag={h.onTag} />
@@ -179,7 +181,7 @@ const RowView = memo(function RowView({ it, selected, checked, h }: { it: Item; 
       </button>
       <div className="row-main">
         <div className="row-title">{it.title || it.url}</div>
-        {(it.note || it.excerpt) && <div className="row-excerpt">{it.note || it.excerpt}</div>}
+        {(it.note || it.summary || it.excerpt) && <div className="row-excerpt">{it.note || it.summary || it.excerpt}</div>}
         <div className="row-sub">
           <Meta it={it} />
           <Tags it={it} onTag={h.onTag} />
