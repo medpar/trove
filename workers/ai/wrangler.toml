@@ -9,4 +9,9 @@ binding = "AI"
 [vars]
 DEFAULT_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
 EMBED_MODEL = "@cf/baai/bge-m3"
-# TROVE_AI_SECRET is a secret: wrangler secret put TROVE_AI_SECRET
+TROVE_URL = "https://trove.mariomedpar.com"
+# Secrets: wrangler secret put TROVE_AI_SECRET (what Trove sends as AI_API_KEY)
+#          wrangler secret put TROVE_ENRICH_KEY (a Trove API key, for the hourly enrich run)
+
+[triggers]
+crons = ["7 * * * *"]

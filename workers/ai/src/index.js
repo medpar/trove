@@ -69,7 +69,25 @@ async function chat(body, env) {
   return { content: stripThinking(textOf(out)), model, usage: out?.usage };
 }
 
+// Hourly (wrangler.toml [triggers]): ask Trove to enrich items still waiting for AI, so the
+// backlog drains at the full free daily allowance instead of one batch from the daily cron.
+// Trove stops a batch as soon as the allowance is used up, so later runs that day return fast.
+async function drain(env) {
+  if (!env.TROVE_URL || !env.TROVE_ENRICH_KEY) return;
+  const res = await fetch(`${env.TROVE_URL.replace(/\/$/, '')}/api/enrich`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${env.TROVE_ENRICH_KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ pending: true, limit: 60 }),
+  });
+  const r = await res.json().catch(() => ({}));
+  console.log(JSON.stringify({ status: res.status, done: r.done, remaining: r.remaining, paused: r.paused || null, error: r.error || r.errors?.[0] || null }));
+}
+
 export default {
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(drain(env));
+  },
+
   async fetch(req, env) {
     const url = new URL(req.url);
     if (req.method === 'GET' && url.pathname === '/health') return json({ ok: true });

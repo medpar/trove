@@ -3,7 +3,7 @@
 // snapshot in Notion plus a Wayback Machine capture). Every step is optional and best-effort:
 // a failure in one never undoes the save or blocks the others.
 import 'server-only';
-import { AIUnavailable, MODELS, aiEnabled, complete, completeJson, embed, packVector, type Part } from './ai';
+import { AIUnavailable, MODELS, aiEnabled, aiStatus, complete, completeJson, embed, packVector, type Part } from './ai';
 import { BROWSER_COLLECTION, GITHUB_COLLECTION, PINTEREST_COLLECTION, X_COLLECTION } from './library-schema.js';
 import { env } from './env';
 import { buildSnapshot, waybackSave } from './snapshot';
@@ -288,21 +288,24 @@ export async function enrichPending({ limit = 20, deadline = Date.now() + 240000
   let done = 0;
   const errors: string[] = [];
   let next = 0;
+  // Once AI pauses (the free daily allowance is used up), stop: the items left keep no
+  // Enriched date, so going on would only redo the same ones without AI on every run.
+  const paused = () => aiEnabled() && !!aiStatus().paused;
   await Promise.all(
     Array.from({ length: 3 }, async () => {
-      while (next < q.results.length && Date.now() < deadline) {
+      while (next < q.results.length && Date.now() < deadline && !paused()) {
         const page = q.results[next++];
         try {
           const r = await enrich(page.id, { autofile: false, archive });
-          done++;
-          if (r.skipped.length && r.skipped.every((s) => /AI/i.test(s))) errors.push(...r.skipped.slice(0, 1));
+          if (!r.skipped.length) done++;
+          else errors.push(...r.skipped.slice(0, 1));
         } catch (e: any) {
           errors.push(`${page.id}: ${e?.message || e}`);
         }
       }
     }),
   );
-  return { done, remaining: q.has_more || next < q.results.length, errors: [...new Set(errors)].slice(0, 5) };
+  return { done, remaining: q.has_more || next < q.results.length, paused: aiStatus().paused, errors: [...new Set(errors)].slice(0, 5) };
 }
 
 /** Should a fresh save be filed by AI? Only captures without a collection, never bulk imports. */

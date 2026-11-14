@@ -144,11 +144,11 @@ export default function SettingsView() {
     let done = 0;
     for (let i = 0; i < 200; i++) {
       try {
-        const r = await api<{ done: number; remaining: boolean; errors: string[] }>('/api/enrich', { method: 'POST', json: { pending: true, limit: 12 } });
+        const r = await api<{ done: number; remaining: boolean; paused?: string | null; errors: string[] }>('/api/enrich', { method: 'POST', json: { pending: true, limit: 12 } });
         done += r.done;
         setBackfill({ done, running: true });
-        if (!r.remaining || (!r.done && r.errors.length)) {
-          setBackfill({ done, running: false, note: !r.done && r.errors[0] ? r.errors[0] : undefined });
+        if (!r.remaining || r.paused || (!r.done && r.errors.length)) {
+          setBackfill({ done, running: false, note: r.paused || (!r.done && r.errors[0]) || undefined });
           break;
         }
       } catch (e: any) {
@@ -333,7 +333,7 @@ export default function SettingsView() {
           <button className="btn" onClick={runBackfill} disabled={backfill?.running}>
             {backfill?.running ? <span className="spinner" /> : <Sparkles size={15} />} Process the rest of the library
           </button>
-          <span className="muted num" role="status">{backfill ? `${backfill.done.toLocaleString()} items processed${backfill.running ? '…' : backfill.note ? ` · ${backfill.note}` : ' · Done'}` : 'Summaries, OCR, search index and archive for items saved before, in batches. A daily job does this too.'}</span>
+          <span className="muted num" role="status">{backfill ? `${backfill.done.toLocaleString()} items processed${backfill.running ? '…' : backfill.note ? ` · ${backfill.note}` : ' · Done'}` : 'Summaries, OCR, search index and archive for items saved before, in batches. An hourly job does this too, up to the free daily AI allowance.'}</span>
         </div>
       </section>
 

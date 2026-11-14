@@ -24,8 +24,10 @@ function read() {
     libraryDb: process.env.TROVE_LIBRARY_DB?.trim() || '',
     password: process.env.TROVE_PASSWORD?.trim() || '',
     sessionSecret: need('TROVE_SESSION_SECRET'),
-    // TROVE_EXTRA_API_KEYS adds keys without touching the main list (e.g. "Backup:key").
-    apiKeys: [process.env.TROVE_API_KEYS || '', process.env.TROVE_EXTRA_API_KEYS || ''].join(',')
+    // TROVE_EXTRA_API_KEYS adds keys without touching the main list (e.g. "Backup:key"), and each
+    // TROVE_API_KEY_<NAME> variable adds one key named after it (TROVE_API_KEY_AI_WORKER → "AI worker"),
+    // so a new key never means rewriting a list that Vercel won't show again.
+    apiKeys: [process.env.TROVE_API_KEYS || '', process.env.TROVE_EXTRA_API_KEYS || '', ...namedKeys()].join(',')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean)
@@ -39,3 +41,13 @@ function read() {
 }
 
 export const env = () => (cached ||= read());
+
+function namedKeys() {
+  return Object.entries(process.env)
+    .filter(([k, v]) => /^TROVE_API_KEY_[A-Z0-9_]+$/.test(k) && v?.trim() && !v.includes(','))
+    .map(([k, v]) => {
+      const words = k.slice('TROVE_API_KEY_'.length).toLowerCase().split('_').filter(Boolean);
+      const name = words.map((w, i) => (w === 'ai' || w === 'mcp' || w === 'api' ? w.toUpperCase() : i ? w : w[0].toUpperCase() + w.slice(1))).join(' ');
+      return `${name}:${v!.trim()}`;
+    });
+}
