@@ -22,12 +22,12 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 - **Never a duplicate.** URLs are normalized (tracking params, `www`, mobile hosts, `youtu.be`, `?s=20`, arXiv versions…). Saving again merges tags, notes and highlights instead.
 - **Organize like Raindrop.** Nested collections (`Dev/AI`), tags, favorites, read-later, notes, highlights, reminders, broken-link detection, bulk edit, four views (cards, list, headlines, moodboard), keyboard-first UI, light & dark themes.
 - **Search with operators:** `"phrase"`, `-word`, `#tag`, `-#tag`, `type:video`, `site:github.com`, `collection:"Dev/AI"`, `is:fav`, `is:unread`, `created:>2025-01`, `highlights:true`, `source:x`, `match:OR`.
-- **AI that files for you.** New saves land in the right collection with tags and a one-line summary, chosen from your own taxonomy. Search by meaning (“that post about pricing dev tools”), ask questions answered from your library with sources, and see related items. Images, screenshots and scanned PDFs are read with OCR so their text is searchable. Runs on Vercel AI Gateway (no keys; a few cents a month).
+- **AI that files for you.** New saves land in the right collection with tags and a one-line summary, chosen from your own taxonomy. Search by meaning (“that post about pricing dev tools”), ask questions answered from your library with sources, and see related items. Images, screenshots and scanned PDFs are read with OCR so their text is searchable. Runs free on Cloudflare Workers AI (`workers/ai`): Qwen3 for filing and answers, Llama 4 Scout for OCR, BGE-M3 multilingual embeddings, all within the free daily allowance.
 - **Web archive.** Every page gets a self-contained snapshot (HTML with styles and images) stored in your Notion, plus a Wayback Machine capture. When a link dies, the archived page is one click away.
 - **Reader.** Reading progress that syncs across devices, listen (text-to-speech), adjustable text size, highlights with notes.
 - **Feeds.** Follow blogs, Substacks, YouTube channels and any RSS/Atom feed (OPML import). Posts wait in Feeds until you save them, or auto-save into a collection.
 - **Backups.** A nightly GitHub Action mirrors the library to Markdown + JSON in a private repo (`trove backup`).
-- **Almost free.** Vercel Hobby + your Notion workspace + Cloudflare DNS. AI is optional and costs cents.
+- **Free.** Vercel Hobby + your Notion workspace + Cloudflare (DNS, email routing, Workers AI free tier).
 
 ## Save from everywhere
 
@@ -101,6 +101,7 @@ web/          Next.js 16 app on Vercel: UI, REST API, MCP server, cron (daily br
   lib/email.ts     Email to Trove (/api/inbound/email)
   lib/feeds.ts     RSS/Atom subscriptions
 workers/email/  Cloudflare Email Routing worker that relays mail to Trove
+workers/ai/     Free OpenAI-compatible relay to Cloudflare Workers AI (filing, OCR, embeddings)
 raycast/        Raycast extension
 extension/    Brave/Chrome MV3 extension: save pages/links/images/highlights, browser bookmarks, X bookmarks sync (local, uses your x.com session)
 cli/          `trove` CLI and the local agent (Claude Code / Codex engines, bridge for the web app)
@@ -122,7 +123,7 @@ X's web API rotates query ids, feature flags and an `x-client-transaction-id`. T
 2. **Vercel:** create a project with root directory `web`, and set `NOTION_TOKEN`, `TROVE_LIBRARY_DS`, `TROVE_LIBRARY_DB`, `TROVE_PASSWORD`, `TROVE_SESSION_SECRET`, `TROVE_API_KEYS` (`Name:key,Name:key`), `TROVE_PUBLIC_URL`, `CRON_SECRET`. For file uploads over 4 MB, connect a private Blob store (`vercel blob create-store trove-uploads --access private`, which sets `BLOB_READ_WRITE_TOKEN`; the free tier is plenty, since staged files are deleted once they are in Notion). Deploy.
 3. **Extension:** load `extension/` unpacked (or the release zip), then set the app URL + API key in its settings.
 4. **Shortcuts:** `python3 scripts/make-shortcut.py https://your-app` builds and signs all four.
-5. **AI (optional):** on Vercel it uses AI Gateway through the project's OIDC token; add a card in Vercel → AI to unlock the free monthly credit. Elsewhere set `AI_GATEWAY_API_KEY`. `TROVE_AI=off` turns it off.
+5. **AI (optional, free):** deploy `workers/ai` with `wrangler deploy` and `wrangler secret put TROVE_AI_SECRET`, then set `AI_BASE_URL` (the worker URL + `/v1`), `AI_API_KEY` (the secret), `AI_MODEL=@cf/qwen/qwen3-30b-a3b-fp8`, `AI_VISION_MODEL=@cf/meta/llama-4-scout-17b-16e-instruct` and `AI_EMBED_MODEL=@cf/baai/bge-m3`. On the Workers Free plan it stops at 10,000 neurons a day (a few thousand saves) and resumes at 00:00 UTC; it can't bill. Without `AI_BASE_URL`, Trove uses Vercel AI Gateway (needs a card). `TROVE_AI=off` turns AI off.
 6. **Backup (optional):** a private repo with `.github/workflows/backup.yml` running `trove backup library` nightly, a `TROVE_API_KEY` secret, and `TROVE_BACKUP_REPO` on Vercel to link it from Settings.
 
 ## Development

@@ -147,7 +147,7 @@ Existing tags: ${tags.join(', ') || '(none yet)'}`;
     const c = typeof r.collection === 'string' ? r.collection.trim().replace(/^\/+|\/+$/g, '').slice(0, 90) : null;
     clean.collection = c && !isSystem(c) ? (s.collections.find((x) => x.name.toLowerCase() === c.toLowerCase())?.name ?? c) : null;
     const known = new Map(s.tags.map((t) => [t.name.toLowerCase(), t.name]));
-    clean.tags = (Array.isArray(r.tags) ? r.tags : [])
+    clean.tags = (Array.isArray(r.tags) ? r.tags : typeof r.tags === 'string' ? (r.tags as string).split(/[,;]+/) : [])
       .map((t) => String(t).trim().replace(/^#/, '').replace(/,/g, ' ').slice(0, 40))
       .filter(Boolean)
       .map((t) => known.get(t.toLowerCase()) || t.toLowerCase())

@@ -1,5 +1,6 @@
-// AI through Vercel AI Gateway (OpenAI-compatible API). On Vercel it authenticates with the
-// project's OIDC token, so there is no key to manage; elsewhere set AI_GATEWAY_API_KEY.
+// AI through any OpenAI-compatible endpoint. Trove's own deployment uses the free Cloudflare
+// Workers AI relay in workers/ai (AI_BASE_URL + AI_API_KEY + the @cf/ models below). Without
+// AI_BASE_URL it uses Vercel AI Gateway, which authenticates with the project's OIDC token.
 //   AI_MODEL           text model for filing, summaries and answers (default anthropic/claude-haiku-5.5)
 //   AI_VISION_MODEL    OCR of images and PDFs (default google/gemini-3.6-flash)
 //   AI_EMBED_MODEL     embeddings for semantic search (default openai/text-embedding-3-small, 512 dims)
@@ -64,7 +65,10 @@ async function call(path: string, body: unknown, timeoutMs = 60000): Promise<any
     const msg = data?.error?.message || res.statusText;
     const type = data?.error?.type || '';
     if ([401, 402, 403].includes(res.status) || /verification|credit|billing|quota/i.test(type + msg)) {
-      pausedUntil = Date.now() + 10 * 60e3;
+      // A used-up daily allowance (Workers AI free tier) comes back at 00:00 UTC; anything else is retried in 10 minutes.
+      const midnight = new Date();
+      midnight.setUTCHours(24, 0, 0, 0);
+      pausedUntil = type === 'quota_exceeded' ? midnight.getTime() : Date.now() + 10 * 60e3;
       pauseReason = msg;
       throw new AIUnavailable(msg);
     }

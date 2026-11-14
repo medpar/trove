@@ -1,0 +1,12 @@
+name = "trove-ai"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+
+[ai]
+binding = "AI"
+
+[vars]
+DEFAULT_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+EMBED_MODEL = "@cf/baai/bge-m3"
+# TROVE_AI_SECRET is a secret: wrangler secret put TROVE_AI_SECRET
