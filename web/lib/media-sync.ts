@@ -226,7 +226,9 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
   const showEpisodesCache = new Map<string, SpEpisode[]>();
   let checked = 0;
   const taken = new Set<string>();
-  const sure = (m: any) => (m && m.d !== null && m.d >= 0.9 ? m : null);
+  // Lengths must agree closely, except on the show's own channel or feed, where ad reads often make
+  // the podcast a few minutes longer than the video.
+  const sure = (m: any, minD = 0.9) => (m && m.d !== null && m.d >= minD ? m : null);
   for (const card of cards) {
     if (budget <= 0) break;
     checked++;
@@ -234,10 +236,10 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
     if (card.sp && !card.yt) {
       budget--;
       const hits = await yt.search(`${card.title} ${card.show || ''}`.trim()).catch(() => [] as YtVideo[]);
-      const pick = (list: YtVideo[]) => sure(bestMatch({ title: card.title, dur: card.sp!.dur, date: card.released }, list.map((h) => ({ ...h, date: h.date }))));
+      const pick = (list: YtVideo[], minD?: number) => sure(bestMatch({ title: card.title, dur: card.sp!.dur, date: card.released }, list.map((h) => ({ ...h, date: h.date }))), minD);
       // The show's own channel first: full re-uploads of popular episodes are common.
       const own = hits.filter((h) => sameName(h.channel, card.show));
-      const m = (own.length ? pick(own) : null) || pick(hits);
+      const m = (own.length ? pick(own, 0.7) : null) || pick(hits);
       if (m) {
         const id = (m.c as YtVideo).id;
         out.push({ p: 'sp', id: card.sp.id, twin: { p: 'yt', id, by: 'search', score: m.score }, at: Date.now() });
@@ -252,7 +254,7 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
           eps = (await sp.showEpisodes(show.id, 0, 50).catch(() => ({ episodes: [] as SpEpisode[] }))).episodes;
           showEpisodesCache.set(show.id, eps);
         }
-        const m = sure(bestMatch({ title: card.title, dur: card.yt.dur }, eps.map((e) => ({ ...e, date: e.released }))));
+        const m = sure(bestMatch({ title: card.title, dur: card.yt.dur }, eps.map((e) => ({ ...e, date: e.released }))), 0.7);
         if (m) {
           const id = (m.c as SpEpisode).id;
           out.push({ p: 'yt', id: card.yt.id, twin: { p: 'sp', id, by: 'search', score: m.score }, at: Date.now() });

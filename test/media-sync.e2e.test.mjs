@@ -70,7 +70,7 @@ async function fakeFetch(input, init = {}) {
     const video = (id, title, len, channel = 'Test Show') => ({ videoRenderer: { videoId: id, title: { runs: [{ text: title }] }, lengthText: { simpleText: len }, ownerText: { runs: [{ text: channel, navigationEndpoint: { browseEndpoint: { browseId: 'UC' + channel.replace(/\W/g, 'x').padEnd(22, 'x').slice(0, 22) } } }] } } });
     const hits = /Ep A/.test(q) ? [video(V1, 'Ep A: The Future of Agents', '1:00:06')]
       : /Ep D/.test(q) ? [video(V4, 'Ep D: Robots at Home', '25:00')]
-        : /Ep F/.test(q) ? [video(V6RE, 'Ep F: Deep Sea', '30:00', 'Random Reuploads'), video(V6, 'Ep F: Deep Sea', '30:00')]
+        : /Ep F/.test(q) ? [video(V6RE, 'Ep F: Deep Sea', '30:00', 'Random Reuploads'), video(V6, 'Ep F: Deep Sea | Test Show', '28:50')]
           : [];
     return json({ contents: { items: hits } });
   }
@@ -176,7 +176,8 @@ test('episodes a rushed sync could not pair wait in a queue and are paired on th
 });
 
 test("the twin search prefers the show's own channel, and finds videos in shows you listen to", async () => {
-  // E6 was heard on Spotify; YouTube has a re-upload first and the show's own upload second.
+  // E6 was heard on Spotify; YouTube has an exact-length re-upload first and the show's own upload,
+  // 4% shorter without the ad reads, second.
   world.extraEpisodes.push([E6, 'Ep F: Deep Sea', 1_800_000, '2026-11-13T10:00:00Z'], [E5, 'Ep E: Oceans', 1_200_000, '2026-11-14T10:00:00Z']);
   world.played[E6] = [600_000, 'IN_PROGRESS'];
   // V5 was watched on YouTube only; its Spotify episode E5 was never played.
