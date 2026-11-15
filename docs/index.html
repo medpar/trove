@@ -4,53 +4,82 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trove — save anything, keep everything</title>
-  <meta name="description" content="Trove: a free, Raindrop-style personal library that archives articles, videos, social posts, repos, notes, browser bookmarks and X bookmarks into Notion." />
+  <meta name="description" content="Trove: a free, personal library that archives articles, videos, posts, repos, papers, notes, podcasts and bookmarks into your own Notion. With AI filing, search by meaning, a CLI and API for agents." />
+  <meta property="og:title" content="Trove — save anything, keep everything" />
+  <meta property="og:description" content="A personal library that archives what you save into your own Notion, so nothing is lost when the original disappears." />
+  <meta property="og:image" content="https://medpar.github.io/trove/screenshots/hero.webp" />
   <link rel="icon" href="icon.png" />
   <style>
     :root {
       --bg: #fbfaf8; --surface: #ffffff; --border: #e7e4de; --text: #1b1a18; --muted: #6c6a64;
-      --accent: #e8590c; --accent-soft: #fdeee4; --code: #f3f1ec;
-      color-scheme: light dark;
+      --accent: #e8590c; --accent-soft: #fdeee4; --code: #f3f1ec; --shadow: 0 18px 50px rgba(60, 30, 10, .12);
+      color-scheme: light;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --bg: #161615; --surface: #1e1e1c; --border: #31302d; --text: #eeede9; --muted: #a09e97; --accent: #ff7a33; --accent-soft: #2e1d13; --code: #262624; }
+      :root:not([data-theme="light"]) { --bg: #161615; --surface: #1e1e1c; --border: #31302d; --text: #eeede9; --muted: #a09e97; --accent: #ff7a33; --accent-soft: #2e1d13; --code: #262624; --shadow: 0 18px 50px rgba(0, 0, 0, .45); color-scheme: dark; }
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; -webkit-font-smoothing: antialiased; }
     a { color: var(--accent); }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+    img { max-width: 100%; height: auto; display: block; }
+    .feature > *, .gallery > * { min-width: 0; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
     nav { display: flex; align-items: center; gap: 10px; padding: 20px 0; font-weight: 650; }
     nav img { width: 28px; height: 28px; }
     nav .sp { flex: 1; }
     nav a { color: var(--muted); text-decoration: none; font-weight: 500; font-size: 15px; }
     nav a:hover { color: var(--text); }
-    .hero { padding: 64px 0 40px; display: grid; gap: 22px; justify-items: start; }
-    .hero h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.04; letter-spacing: -0.035em; margin: 0; max-width: 14ch; }
+    .hero { padding: 56px 0 28px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; justify-items: center; text-align: center; }
+    .hero h1 { font-size: clamp(36px, 6.5vw, 64px); line-height: 1.03; letter-spacing: -0.035em; margin: 0; }
     .hero h1 em { font-style: normal; color: var(--accent); }
-    .hero p { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); margin: 0; max-width: 56ch; }
-    .cta { display: flex; flex-wrap: wrap; gap: 12px; }
+    .hero p { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); margin: 0; max-width: 60ch; }
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 18px; border-radius: 10px; font-weight: 650; text-decoration: none; border: 1px solid var(--border); color: var(--text); background: var(--surface); }
     .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .chips { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--muted); }
+    .shot { border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
+    .hero-img { margin: 12px auto 0; width: 100%; max-width: 1040px; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; font-size: 13.5px; color: var(--muted); justify-content: center; }
     .chips span { border: 1px solid var(--border); border-radius: 99px; padding: 3px 11px; background: var(--surface); }
-    section { padding: 36px 0; }
-    h2 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 18px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    section { padding: 48px 0; }
+    h2 { font-size: clamp(24px, 3.4vw, 32px); letter-spacing: -0.02em; margin: 0 0 8px; }
+    .lead { color: var(--muted); margin: 0 0 26px; max-width: 62ch; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
     .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
     .card h3 { margin: 0 0 6px; font-size: 16.5px; }
     .card p { margin: 0; color: var(--muted); font-size: 15px; }
     .card .ico { font-size: 22px; display: block; margin-bottom: 8px; }
+    .feature { display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px; align-items: center; padding: 30px 0; }
+    .feature.flip { grid-template-columns: 1.5fr 1fr; }
+    .feature.flip .text { order: 2; }
+    .feature h3 { font-size: 24px; letter-spacing: -0.02em; margin: 0 0 10px; }
+    .feature p { color: var(--muted); margin: 0 0 12px; }
+    .feature ul { margin: 0; padding-left: 20px; color: var(--muted); }
+    .kicker { color: var(--accent); font-weight: 700; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 6px; display: block; }
+    .gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
+    .gallery figure { margin: 0; }
+    .gallery figcaption { color: var(--muted); font-size: 14.5px; margin-top: 10px; }
+    .gallery figcaption b { color: var(--text); }
+    .phones { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+    .phones .shot { width: min(240px, 44vw); border-radius: 26px; border: 8px solid #111; }
+    .phones .ext { width: min(280px, 90vw); border-radius: 12px; border: 1px solid var(--border); align-self: flex-start; }
+    .sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); }
+    .sources div { padding: 16px 18px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .sources b { display: block; margin-bottom: 2px; }
+    .sources span { color: var(--muted); font-size: 14.5px; }
+    pre { background: var(--code); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; overflow-x: auto; font: 14px/1.6 ui-monospace, 'SF Mono', Menlo, monospace; margin: 0; }
+    code { background: var(--code); padding: 2px 6px; border-radius: 6px; font-size: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+    pre code { background: none; padding: 0; }
     ol.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
     ol.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; align-items: start; }
     ol.steps li::before { content: counter(s); width: 30px; height: 30px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; display: grid; place-items: center; }
-    code { background: var(--code); padding: 2px 6px; border-radius: 6px; font-size: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
-    .how { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); }
-    .how div { padding: 18px 20px; border-right: 1px solid var(--border); }
-    .how div:last-child { border-right: 0; }
-    .how b { display: block; margin-bottom: 4px; }
-    .how span { color: var(--muted); font-size: 14.5px; }
+    .note { color: var(--muted); font-size: 13.5px; text-align: center; margin-top: 18px; }
     footer { padding: 40px 0 56px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--border); margin-top: 24px; }
-    @media (max-width: 640px) { .how div { border-right: 0; border-bottom: 1px solid var(--border); } .hero { padding-top: 32px; } }
+    @media (max-width: 800px) {
+      .feature, .feature.flip { grid-template-columns: 1fr; gap: 18px; }
+      .feature.flip .text { order: 0; }
+      .hero { padding-top: 28px; }
+      nav a.hide-sm { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -58,56 +87,136 @@
     <nav>
       <img src="icon.png" alt="" /> Trove
       <span class="sp"></span>
-      <a href="#features">Features</a>
-      <a href="#install">Install</a>
+      <a class="hide-sm" href="#tour">Tour</a>
+      <a class="hide-sm" href="#agents">Agents</a>
+      <a href="#start">Get started</a>
       <a href="https://github.com/medpar/trove">GitHub</a>
     </nav>
 
     <header class="hero">
       <h1>Save anything, <em>keep everything.</em></h1>
-      <p>Trove is a personal, Raindrop-style library. Save articles, videos, social posts, repos, papers, notes, browser bookmarks and your X bookmarks from any device, terminal or AI agent. The content itself is archived in your own Notion, so nothing is lost when the original disappears.</p>
+      <p>A personal library for articles, videos, posts, repos, papers, notes, podcasts and bookmarks. The content itself is archived in your own Notion, so nothing is lost when the original disappears.</p>
       <div class="cta">
         <a class="btn primary" href="https://trove.mariomedpar.com">Open Trove</a>
         <a class="btn" href="https://github.com/medpar/trove/releases/latest">⬇ Browser extension</a>
         <a class="btn" href="https://github.com/medpar/trove">View source</a>
       </div>
-      <div class="chips"><span>Web app</span><span>Brave/Chrome extension</span><span>Apple Shortcut</span><span>CLI and API for agents</span><span>Built-in AI librarian</span><span>Free & MIT</span></div>
+      <div class="chips"><span>Web app</span><span>iPhone &amp; iPad</span><span>Brave/Chrome extension</span><span>Telegram &amp; email</span><span>CLI, API &amp; MCP</span><span>Free AI filing</span><span>Free &amp; MIT</span></div>
+      <img class="hero-img" src="screenshots/hero.webp" width="1600" height="980" alt="Trove's library in the browser, the extension popup and the Shows view on a phone" />
     </header>
 
-    <section id="features">
-      <h2>Everything you saved, kept for good</h2>
+    <section>
       <div class="grid">
-        <div class="card"><h3>Archives the content</h3><p>Article text, YouTube descriptions and transcripts, posts with their media, READMEs and papers are copied into Notion, not just linked.</p></div>
-        <div class="card"><h3>Save from anywhere</h3><p>Web app, browser extension, the Share sheet on iPhone, iPad and Mac, a bookmarklet, the CLI and any AI agent.</p></div>
-        <div class="card"><h3>Never a duplicate</h3><p>Links are normalized, so saving something twice merges tags and notes instead of creating a second copy.</p></div>
-        <div class="card"><h3>Organize like Raindrop</h3><p>Nested collections, tags, favorites, read later, notes, highlights, bulk edits and search operators like #tag and type:video.</p></div>
-        <div class="card"><h3>Your X bookmarks</h3><p>The extension archives every X bookmark with full threads and media, within seconds of bookmarking.</p></div>
-        <div class="card"><h3>A librarian agent</h3><p>Ask it to tag, sort and summarize your library. It runs on your own Claude or ChatGPT subscription, with no API keys.</p></div>
+        <div class="card"><span class="ico">🗄️</span><h3>Keeps the content</h3><p>Article text, video transcripts, threads with media, READMEs, papers and a full page snapshot, not just the link.</p></div>
+        <div class="card"><span class="ico">🧠</span><h3>Files itself</h3><p>Free AI picks the collection and tags from your own taxonomy, writes a summary and reads text in images.</p></div>
+        <div class="card"><span class="ico">🔎</span><h3>Finds by meaning</h3><p>Search with words or operators, or ask a question and get an answer written from your saves, with sources.</p></div>
+        <div class="card"><span class="ico">🔓</span><h3>Yours, and free</h3><p>One Notion database you own and can edit. Runs on free tiers of Vercel, Notion and Cloudflare.</p></div>
+      </div>
+    </section>
+
+    <section id="tour">
+      <h2>A quick tour</h2>
+      <p class="lead">Screenshots use a fictional sample library.</p>
+
+      <div class="feature">
+        <div class="text">
+          <span class="kicker">Library</span>
+          <h3>Everything in one place, organized like you'd want</h3>
+          <p>Nested collections, tags, favorites, read later, notes, highlights and reminders. Cards, list, headlines or moodboard, light or dark, and keyboard-first.</p>
+          <ul><li>Never a duplicate: links are normalized and saves merge.</li><li>Broken-link checks, with the archived copy one click away.</li></ul>
+        </div>
+        <img class="shot" src="screenshots/library.webp" width="2880" height="1800" alt="Library in cards view" loading="lazy" />
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <span class="kicker">Reader</span>
+          <h3>Read it later, even after it's gone</h3>
+          <p>The archived text in a calm reader, with highlights and notes, listen aloud, and reading progress that syncs across devices. Every page also gets a snapshot and a Wayback Machine capture.</p>
+        </div>
+        <img class="shot" src="screenshots/reader.webp" width="2880" height="1800" alt="The reader panel" loading="lazy" />
+      </div>
+
+      <div class="feature">
+        <div class="text">
+          <span class="kicker">Ask &amp; search</span>
+          <h3>Ask your library a question</h3>
+          <p>“What have I saved about offline sync?” gets an answer written from your own saves, with numbered sources. Plain sentences in search match by meaning, not just words.</p>
+        </div>
+        <img class="shot" src="screenshots/ask.webp" width="2880" height="1800" alt="Ask panel answering from saved items" loading="lazy" />
+      </div>
+
+      <div class="feature flip">
+        <div class="text">
+          <span class="kicker">Shows</span>
+          <h3>Never lose your place in a podcast</h3>
+          <p>What you watch on YouTube and listen to on Spotify, on any device, in one record per episode: what you actually played, where you stopped, and whether you finished. No Premium, no API keys.</p>
+        </div>
+        <img class="shot" src="screenshots/shows.webp" width="2880" height="1800" alt="Shows: episodes in progress across YouTube and Spotify" loading="lazy" />
+      </div>
+
+      <div class="gallery" style="margin-top: 30px">
+        <figure><img class="shot" src="screenshots/agent.webp" alt="Agent panel" loading="lazy" /><figcaption><b>Librarian agent.</b> Tags, sorts and cleans up, on your own Claude or ChatGPT plan.</figcaption></figure>
+        <figure><img class="shot" src="screenshots/feeds.webp" alt="Feeds" loading="lazy" /><figcaption><b>Feeds.</b> Blogs, Substacks, YouTube channels, any RSS.</figcaption></figure>
+        <figure><img class="shot" src="screenshots/moodboard.webp" alt="Moodboard" loading="lazy" /><figcaption><b>Moodboard.</b> Images and Pinterest boards, synced with images archived.</figcaption></figure>
+        <figure><img class="shot" src="screenshots/search.webp" alt="Search by meaning" loading="lazy" /><figcaption><b>Search by meaning.</b> Hybrid keyword + semantic search.</figcaption></figure>
+        <figure><img class="shot" src="screenshots/palette.webp" alt="Command palette" loading="lazy" /><figcaption><b>Command palette.</b> ⌘K to jump anywhere or ask.</figcaption></figure>
+        <figure><img class="shot" src="screenshots/library-dark.webp" alt="Dark mode" loading="lazy" /><figcaption><b>Dark mode.</b> Here with the list view.</figcaption></figure>
       </div>
     </section>
 
     <section>
-      <h2>How it works</h2>
-      <div class="how">
-        <div><b>Uses your session</b><span>Reads bookmarks through x.com's own web API with your login. No paid X API.</span></div>
-        <div><b>Learns, doesn't guess</b><span>Records the request format your x.com tabs use and replays it, so X changes don't break it.</span></div>
-        <div><b>Notion fetches media</b><span>Photos and videos go straight from X's CDN into Notion. Your browser downloads nothing.</span></div>
-        <div><b>Sleeps when idle</b><span>An event-driven service worker with no content scripts. It only wakes to sync.</span></div>
+      <h2>On your phone, in your browser</h2>
+      <p class="lead">An installable web app and a native iPhone/iPad app, plus an extension that saves the page you're on and tells you where you left off in a video.</p>
+      <div class="phones">
+        <img class="shot" src="screenshots/mobile-library.webp" alt="Library on a phone" loading="lazy" />
+        <img class="shot" src="screenshots/mobile-shows.webp" alt="Shows on a phone, dark mode" loading="lazy" />
+        <img class="ext shot" src="screenshots/extension.webp" alt="Browser extension popup" loading="lazy" />
       </div>
     </section>
 
-    <section id="install">
-      <h2>Install in two minutes</h2>
+    <section>
+      <h2>Save from everywhere</h2>
+      <p class="lead">Everything lands in the same library.</p>
+      <div class="sources">
+        <div><b>🌐 Web app</b><span>Paste anywhere, drop a link, or press N.</span></div>
+        <div><b>🧩 Extension</b><span>Pages, highlights, bookmarks, X bookmarks, Pinterest.</span></div>
+        <div><b>📱 Share sheet</b><span>Four Shortcuts for iPhone, iPad and Mac.</span></div>
+        <div><b>✈️ Telegram</b><span>Send or forward anything to your bot.</span></div>
+        <div><b>✉️ Email</b><span>Newsletters become articles.</span></div>
+        <div><b>⌨️ CLI &amp; API</b><span>For scripts and AI agents.</span></div>
+        <div><b>📡 Feeds</b><span>RSS, Substack, YouTube channels.</span></div>
+        <div><b>⭐ GitHub stars</b><span>Saved with their README.</span></div>
+      </div>
+    </section>
+
+    <section id="agents">
+      <div class="feature">
+        <div class="text">
+          <span class="kicker">For AI agents</span>
+          <h3>Built to be driven by agents</h3>
+          <p>Anything that can run a command or make an HTTP request can save to Trove and search it: the <code>trove</code> CLI, a REST API with OpenAPI docs, and an MCP server. Agents can upload images, video and documents too.</p>
+          <pre><code>npm install -g github:medpar/trove
+trove save https://example.com -t ai
+trove ask "what did I save about pricing?"</code></pre>
+        </div>
+        <img class="shot" src="screenshots/cli.webp" alt="The trove CLI: save, search and ask" loading="lazy" />
+      </div>
+    </section>
+
+    <section id="start">
+      <h2>Get started</h2>
+      <p class="lead">Self-host it in a few minutes on free tiers. Full instructions are in the <a href="https://github.com/medpar/trove#-self-host-it">README</a>.</p>
       <ol class="steps">
-        <li><div>Download the <a href="https://github.com/medpar/trove/releases/latest">latest release zip</a> and unzip it.</div></li>
-        <li><div>Open <code>brave://extensions</code> or <code>chrome://extensions</code>, turn on <b>Developer mode</b>, click <b>Load unpacked</b> and choose the folder.</div></li>
-        <li><div>Create a free internal integration at <a href="https://www.notion.so/profile/integrations">notion.so/profile/integrations</a>, share a page with it, then paste the secret in Trove's settings and click <b>Create new database</b>.</div></li>
-        <li><div>Stay logged in to x.com. Trove archives everything and keeps syncing.</div></li>
+        <li><div><b>Notion:</b> run <code>node scripts/setup-trove.mjs</code> to create your database.</div></li>
+        <li><div><b>Vercel:</b> deploy the <code>web/</code> folder with your Notion token, a password and API keys.</div></li>
+        <li><div><b>Extension:</b> download the <a href="https://github.com/medpar/trove/releases/latest">latest release</a>, open <code>chrome://extensions</code>, turn on Developer mode and load it unpacked. Paste your app URL and key.</div></li>
+        <li><div><b>Optional:</b> free AI on Cloudflare Workers AI, Shortcuts, Telegram, email, Shows and nightly backups.</div></li>
       </ol>
     </section>
 
     <footer>
-      Trove is open source (MIT) · <a href="https://github.com/medpar/trove">github.com/medpar/trove</a> · Not affiliated with X Corp. or Notion Labs.
+      Trove is open source (MIT) · <a href="https://github.com/medpar/trove">github.com/medpar/trove</a> · Not affiliated with Notion, X, YouTube, Spotify or Pinterest.
     </footer>
   </div>
 </body>
