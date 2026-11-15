@@ -3,7 +3,7 @@
 // history with your YouTube sign-in cookies. Runs hourly (the Cloudflare worker's cron), when you
 // close the Spotify or YouTube app on the iPhone (an iOS automation), and when you open Shows.
 import 'server-only';
-import { bestMatch, commonWords } from '../../extension/lib/progress.js';
+import { bestMatch, sameName } from '../../extension/lib/progress.js';
 import { applyEvents, listEpisodes, lookupRefs, type Card, type EpisodeEvent } from './episodes';
 import { hasYouTubeSession, InnerTube, parseCookies, YouTubeAuthError, type CookieJar, type YtVideo } from './innertube';
 import { buildCatalog, listShows, staleShows, withCatalog } from './shows';
@@ -20,6 +20,8 @@ type SyncState = {
   youtube?: Side & { seen?: Record<string, number> };
   /** Episodes heard on only one platform, still to be looked up on the other (a first import brings hundreds). */
   twins?: string[];
+  /** Which version of the twin search last looked up everything already in Notion. */
+  twinSeed?: number;
   twinsSeeded?: number;
   running?: number;
 };
@@ -223,16 +225,26 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
   const out: EpisodeEvent[] = [];
   const showEpisodesCache = new Map<string, SpEpisode[]>();
   let checked = 0;
+  const taken = new Set<string>();
+  const sure = (m: any) => (m && m.d !== null && m.d >= 0.9 ? m : null);
   for (const card of cards) {
     if (budget <= 0) break;
     checked++;
+    if (taken.has(refOf(card))) continue;
     if (card.sp && !card.yt) {
       budget--;
-      const hits = await yt.search(`${card.title} ${card.show || ''}`.trim()).catch(() => []);
-      const m = bestMatch({ title: card.title, dur: card.sp.dur, date: card.released }, hits.map((h) => ({ ...h, date: h.date })));
-      if (m && m.d !== null && m.d >= 0.9) out.push({ p: 'sp', id: card.sp.id, twin: { p: 'yt', id: (m.c as YtVideo).id, by: 'search', score: m.score }, at: Date.now() });
+      const hits = await yt.search(`${card.title} ${card.show || ''}`.trim()).catch(() => [] as YtVideo[]);
+      const pick = (list: YtVideo[]) => sure(bestMatch({ title: card.title, dur: card.sp!.dur, date: card.released }, list.map((h) => ({ ...h, date: h.date }))));
+      // The show's own channel first: full re-uploads of popular episodes are common.
+      const own = hits.filter((h) => sameName(h.channel, card.show));
+      const m = (own.length ? pick(own) : null) || pick(hits);
+      if (m) {
+        const id = (m.c as YtVideo).id;
+        out.push({ p: 'sp', id: card.sp.id, twin: { p: 'yt', id, by: 'search', score: m.score }, at: Date.now() });
+        taken.add(`yt:${id}`);
+      }
     } else if (card.yt && !card.sp && card.show) {
-      const shows = (st.spotify?.heard || []).filter((h) => commonWords([h.title, card.show!], 0.5).size > 0);
+      const shows = (st.spotify?.heard || []).filter((h) => sameName(h.title, card.show));
       for (const show of shows.slice(0, 2)) {
         budget--;
         let eps = showEpisodesCache.get(show.id);
@@ -240,9 +252,11 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
           eps = (await sp.showEpisodes(show.id, 0, 50).catch(() => ({ episodes: [] as SpEpisode[] }))).episodes;
           showEpisodesCache.set(show.id, eps);
         }
-        const m = bestMatch({ title: card.title, dur: card.yt.dur }, eps.map((e) => ({ ...e, date: e.released })));
-        if (m && m.d !== null && m.d >= 0.9) {
-          out.push({ p: 'yt', id: card.yt.id, twin: { p: 'sp', id: (m.c as SpEpisode).id, by: 'search', score: m.score }, at: Date.now() });
+        const m = sure(bestMatch({ title: card.title, dur: card.yt.dur }, eps.map((e) => ({ ...e, date: e.released }))));
+        if (m) {
+          const id = (m.c as SpEpisode).id;
+          out.push({ p: 'yt', id: card.yt.id, twin: { p: 'sp', id, by: 'search', score: m.score }, at: Date.now() });
+          taken.add(`sp:${id}`);
           break;
         }
       }
@@ -251,6 +265,8 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
   return { events: out, checked };
 }
 
+/** Bump to look every single-platform episode up again once (after the twin search gets better). */
+const TWIN_SEARCH = 2;
 const refOf = (c: Card) => (c.yt ? `yt:${c.yt.id}` : `sp:${c.sp?.id}`);
 const single = (c: Card | null | undefined): c is Card => !!c && !!(c.yt || c.sp) && !(c.yt && c.sp);
 
@@ -349,10 +365,11 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
   // the ones earlier runs had no time for. A few lookups per run, so a big first import catches up hourly.
   const fresh = new Map(cards.filter(single).map((c) => [refOf(c), c]));
   let queue = [...new Set([...fresh.keys(), ...(st.twins || [])])];
-  if (!st.twinsSeeded && Date.now() < deadline - 60_000) {
+  if ((st.twinSeed || 0) < TWIN_SEARCH && Date.now() < deadline - 60_000) {
     try {
       queue = [...new Set([...queue, ...(await unpairedRefs())])];
-      st.twinsSeeded = Date.now();
+      st.twinSeed = TWIN_SEARCH;
+      delete st.twinsSeeded;
     } catch { /* next run */ }
   }
   if (queue.length && Date.now() < deadline - 20_000) {

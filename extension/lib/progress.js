@@ -394,6 +394,18 @@ export function commonWords(titles, share = 0.3) {
   return new Set([...counts].filter(([, n]) => n >= min).map(([w]) => w));
 }
 
+const GENERIC_NAME = new Set(['show', 'channel', 'radio', 'tv', 'clips', 'highlights', 'live', 'productions', 'media', 'network', 'studio', 'studios', 'shorts']);
+
+/** Whether a YouTube channel and a podcast are the same one by name ("Lex Fridman" and "Lex Fridman Podcast"). */
+export function sameName(a, b) {
+  const A = new Set(titleTokens(a).filter((w) => !GENERIC_NAME.has(w)));
+  const B = new Set(titleTokens(b).filter((w) => !GENERIC_NAME.has(w)));
+  if (!A.size || !B.size) return false;
+  let shared = 0;
+  for (const w of A) if (B.has(w)) shared++;
+  return shared > 0 && shared / Math.min(A.size, B.size) >= 0.5;
+}
+
 export function titleSimilarity(a, b, stop) {
   const A = new Set(titleTokens(a, stop));
   const B = new Set(titleTokens(b, stop));

@@ -469,6 +469,9 @@ export async function patchEpisode(pageId: string, patch: EpisodePatch): Promise
   return withLock(keys.length ? keys : [`page:${pageId}`], () => patchLocked(pageId, patch, link));
 }
 
+/** Whether a platform copy has anything played on it (and so is worth a page of its own). */
+const played = (c: Copy) => !!(c.ranges?.length || c.pos || c.ext?.pos || c.ext?.done);
+
 async function patchLocked(pageId: string, patch: EpisodePatch, link: { p: P; id: string } | null): Promise<{ card: Card; split?: Card }> {
   const { page, rec: base } = await getEpisode(pageId);
   let rec: Rec = { ...base };
@@ -489,8 +492,12 @@ async function patchLocked(pageId: string, patch: EpisodePatch, link: { p: P; id
   const splitOff = async (p: P) => {
     const other: P = p === 'yt' ? 'sp' : 'yt';
     const copy = rec[p]!;
-    const moved: Rec = { v: 1, title: copy.title || rec.title, show: copy.show || copy.channel || rec.show, image: p === 'sp' ? copy.image : undefined, [p]: copy, unlinked: rec[other]?.id ? [`${other}:${rec[other]!.id}`] : [] };
-    const created = await writeRecord(null, ownFinish(moved, rec.finishedAt));
+    // A copy you never played (paired by a search, say) needs no page of its own: the two just stay apart.
+    if (played(copy)) {
+      const moved: Rec = { v: 1, title: copy.title || rec.title, show: copy.show || copy.channel || rec.show, image: p === 'sp' ? copy.image : undefined, [p]: copy, unlinked: rec[other]?.id ? [`${other}:${rec[other]!.id}`] : [] };
+      const created = await writeRecord(null, ownFinish(moved, rec.finishedAt));
+      split = toCard(created, recordOf(created));
+    }
     const prevFinish = rec.finishedAt;
     delete rec[p];
     rec.unlinked = [...new Set([...(rec.unlinked || []), `${p}:${copy.id}`])];
@@ -498,7 +505,6 @@ async function patchLocked(pageId: string, patch: EpisodePatch, link: { p: P; id
     if (rec[other]?.title) rec.title = rec[other]!.title;
     // Each half is finished only on its own evidence (a mark by hand stays with this page).
     rec = ownFinish(rec, prevFinish);
-    split = toCard(created, recordOf(created));
   };
 
   if (link) {

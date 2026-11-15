@@ -88,11 +88,15 @@ test('unlinking splits the pair for good; linking by hand merges', async () => {
   assert.equal(c.yt.id, y);
   const { card, split } = await E.patchEpisode(c.id, { unlink: 'yt' });
   assert.equal(card.yt, null);
-  assert.equal(split.yt.id, y);
+  assert.equal(split, undefined, 'a video never played needs no page of its own');
   // The catalog still pairs them: they stay apart.
   const [after] = await E.applyEvents([{ p: 'sp', id: s, at: T + 10, ext: { pos: 950 }, src: 'spotify', twin: { p: 'yt', id: y, by: 'catalog' } }]);
   assert.equal(after.yt, null);
-  assert.equal((await E.lookupRefs([`yt:${y}`]))[`yt:${y}`].id, split.id);
+  assert.equal((await E.lookupRefs([`yt:${y}`]))[`yt:${y}`], null);
+  // Playing the video later gives it a page of its own, still apart.
+  const [video] = await E.applyEvents([{ p: 'yt', id: y, at: T + 20, title: 'Wrong pair', dur: 1800, ranges: [[0, 60]], pos: 60, src: 'extension', twin: { p: 'sp', id: s, by: 'catalog' } }]);
+  assert.notEqual(video.id, after.id);
+  assert.equal(video.sp, null);
   // Linking by hand brings them back together.
   const { card: linked } = await E.patchEpisode(after.id, { link: `https://youtu.be/${y}` });
   assert.equal(linked.yt.id, y);

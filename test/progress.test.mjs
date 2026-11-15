@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   Tracker, applyEvent, bestMatch, clock, commonWords, coveredSeconds, markManual, mapPosition, matchAll, mediaRef, mergeRecords,
-  normRanges, parseClock, parseHumanDuration, seriesFor, startTimeOf, suggestSeries, summarize, titleSimilarity,
+  normRanges, parseClock, parseHumanDuration, seriesFor, startTimeOf, suggestSeries, summarize, titleSimilarity, sameName
 } from '../extension/lib/progress.js';
 
 const T0 = 1_790_000_000_000;
@@ -207,4 +207,14 @@ test('series from rules and suggested from repeated prefixes', () => {
   const sug = suggestSeries(['How To Build The Future: A', 'How To Build The Future: B', 'How to Build the Future: C', 'X | Lightcone Podcast', 'Y | Lightcone Podcast', 'Z | Lightcone Podcast', 'Other']);
   assert.deepEqual(sug.map((s) => s.name), ['Lightcone Podcast']);
   assert.equal(suggestSeries(['How To Build The Future: A', 'How To Build The Future: B', 'How To Build The Future: C'])[0].name, 'How To Build The Future');
+});
+
+test('a YouTube channel and a podcast are matched by name, not by filler words', () => {
+  assert.ok(sameName('Lex Fridman', 'Lex Fridman Podcast'));
+  assert.ok(sameName('Y Combinator', 'Y Combinator Startup Podcast'));
+  assert.ok(sameName('David Senra', 'David Senra'));
+  assert.ok(!sameName('Zenvora Productions', 'Lex Fridman Podcast'), 're-upload channel');
+  assert.ok(!sameName('The Official Podcast Channel', 'The Podcast Show'), 'only filler in common');
+  assert.ok(!sameName('', 'Lex Fridman Podcast'));
+  assert.ok(!sameName(null, undefined));
 });
