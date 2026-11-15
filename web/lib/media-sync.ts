@@ -4,7 +4,7 @@
 // close the Spotify or YouTube app on the iPhone (an iOS automation), and when you open Shows.
 import 'server-only';
 import { bestMatch, commonWords } from '../../extension/lib/progress.js';
-import { applyEvents, type Card, type EpisodeEvent } from './episodes';
+import { applyEvents, listEpisodes, lookupRefs, type Card, type EpisodeEvent } from './episodes';
 import { hasYouTubeSession, InnerTube, parseCookies, YouTubeAuthError, type CookieJar, type YtVideo } from './innertube';
 import { buildCatalog, listShows, staleShows, withCatalog } from './shows';
 import { SpotifyAuthError, SpotifyWeb, type SpEpisode } from './spotify';
@@ -18,6 +18,9 @@ type Side = { at?: number; ok?: boolean; error?: string | null; auth?: boolean; 
 type SyncState = {
   spotify?: Side & { seen?: Record<string, string>; shows?: Record<string, number>; libraryAt?: number; hashes?: Record<string, string>; heard?: { id: string; title: string }[] };
   youtube?: Side & { seen?: Record<string, number> };
+  /** Episodes heard on only one platform, still to be looked up on the other (a first import brings hundreds). */
+  twins?: string[];
+  twinsSeeded?: number;
   running?: number;
 };
 
@@ -219,8 +222,10 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
   const sp = new SpotifyWeb({ spDc });
   const out: EpisodeEvent[] = [];
   const showEpisodesCache = new Map<string, SpEpisode[]>();
+  let checked = 0;
   for (const card of cards) {
     if (budget <= 0) break;
+    checked++;
     if (card.sp && !card.yt) {
       budget--;
       const hits = await yt.search(`${card.title} ${card.show || ''}`.trim()).catch(() => []);
@@ -243,7 +248,23 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
       }
     }
   }
-  return out;
+  return { events: out, checked };
+}
+
+const refOf = (c: Card) => (c.yt ? `yt:${c.yt.id}` : `sp:${c.sp?.id}`);
+const single = (c: Card | null | undefined): c is Card => !!c && !!(c.yt || c.sp) && !(c.yt && c.sp);
+
+/** Every episode heard on only one platform, most recent first (seeds the twin queue once). */
+async function unpairedRefs() {
+  const refs: string[] = [];
+  let cursor: string | null = null;
+  for (let i = 0; i < 30; i++) {
+    const page = await listEpisodes({ cursor, limit: 100 });
+    refs.push(...page.cards.filter(single).map(refOf));
+    if (!page.cursor) break;
+    cursor = page.cursor;
+  }
+  return refs;
 }
 
 /** Sync everything that is connected. `deep` re-reads more history (first import). */
@@ -304,7 +325,8 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
   }
 
   // Store the events; each one is remembered as seen only once it is in Notion.
-  let cards: Card[] = [];
+  const cards: Card[] = [];
+  let applied = 0;
   try {
     for (let i = 0; i < events.length && Date.now() < deadline; i += 25) {
       const batch = events.slice(i, i + 25);
@@ -314,17 +336,47 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
         const side = e.mark.side === 'spotify' ? (st.spotify ||= {}) : (st.youtube ||= {});
         (side.seen ||= {} as Record<string, any>)[e.mark.id] = e.mark.sig;
       }
+      applied = i + batch.length;
     }
   } catch (e: any) {
     result.error = `Saving to Notion: ${e.message}`;
   }
+  // Several plays of one episode land on one card, so count what was left unsaved by events.
   result.updated = cards.length;
-  if (events.length > cards.length && !result.error) result.left = events.length - cards.length;
-  if (Date.now() < deadline - 20_000) {
-    const twins = await findTwins(cards.filter((c) => !(c.sp && c.yt)), st, { spDc: spc?.spDc }).catch(() => []);
-    if (twins.length) cards = await applyEvents(twins);
-    result.paired = twins.length;
+  if (applied < events.length && !result.error) result.left = events.length - applied;
+
+  // Look for the other platform's copy of what you heard on only one: this run's episodes first, then
+  // the ones earlier runs had no time for. A few lookups per run, so a big first import catches up hourly.
+  const fresh = new Map(cards.filter(single).map((c) => [refOf(c), c]));
+  let queue = [...new Set([...fresh.keys(), ...(st.twins || [])])];
+  if (!st.twinsSeeded && Date.now() < deadline - 60_000) {
+    try {
+      queue = [...new Set([...queue, ...(await unpairedRefs())])];
+      st.twinsSeeded = Date.now();
+    } catch { /* next run */ }
   }
+  if (queue.length && Date.now() < deadline - 20_000) {
+    const head = queue.slice(0, 60);
+    let known: Record<string, Card | null> | null = null;
+    try {
+      known = await lookupRefs(head.filter((r) => !fresh.has(r)));
+    } catch { /* keep them queued */ }
+    const cardOf = (r: string) => fresh.get(r) || known?.[r];
+    const candidates = head.map(cardOf).filter(single);
+    try {
+      const { events: twins, checked } = await findTwins(candidates, st, { spDc: spc?.spDc });
+      // Done with: what was looked up, and what is gone or got paired meanwhile.
+      const settled = new Set(candidates.slice(0, checked).map(refOf));
+      if (known) for (const r of head) if (!single(cardOf(r))) settled.add(r);
+      queue = queue.filter((r) => !settled.has(r));
+      if (twins.length) await applyEvents(twins);
+      result.paired = twins.length;
+    } catch (e: any) {
+      result.pairing = e.message;
+    }
+  }
+  st.twins = queue.length ? queue.slice(0, 3000) : undefined;
+  if (queue.length) result.toPair = queue.length;
   if (st.spotify?.seen) st.spotify.seen = trim(st.spotify.seen);
   if (st.youtube?.seen) st.youtube.seen = trim(st.youtube.seen);
   if (JSON.stringify(st) !== before) await writeState(STATE, st);

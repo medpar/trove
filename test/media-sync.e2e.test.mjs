@@ -16,6 +16,8 @@ const E1 = '1'.repeat(22);
 const E2 = '2'.repeat(22);
 const V1 = 'aaaaaaaaaaa';
 const V2 = 'bbbbbbbbbbb';
+const E4 = '4'.repeat(22);
+const V4 = 'ddddddddddd';
 const world = { anonymous: false, played: { [E1]: [900_000, 'IN_PROGRESS'], [E2]: [0, 'COMPLETED'] }, history: { [V1]: 37, [V2]: 100 }, rotate: 'rotated-1' };
 const seen = [];
 
@@ -46,13 +48,13 @@ async function fakeFetch(input, init = {}) {
     if (body.operationName === 'profileAttributes') return json({ data: { me: { profile: { username: 'user1', name: 'Mario' } } } });
     if (body.operationName === 'libraryV3') return json({ data: { me: { libraryV3: { __typename: 'LibraryPage', items: [] } } } });
     if (body.operationName === 'queryPodcastEpisodes')
-      return json({ data: { podcastUnionV2: { __typename: 'Podcast', name: 'Test Show Podcast', episodesV2: { totalCount: 3, items: [episode(E1, 'Ep A: The Future of Agents', 3_606_000, '2026-11-10T10:00:00Z'), episode(E2, 'Ep B: Pricing', 1_800_000, '2026-11-03T10:00:00Z'), episode('3'.repeat(22), 'Ep C', 1_200_000, '2026-10-27T10:00:00Z')] } } } });
+      return json({ data: { podcastUnionV2: { __typename: 'Podcast', name: 'Test Show Podcast', episodesV2: { totalCount: 3, items: [episode(E1, 'Ep A: The Future of Agents', 3_606_000, '2026-11-10T10:00:00Z'), episode(E2, 'Ep B: Pricing', 1_800_000, '2026-11-03T10:00:00Z'), episode('3'.repeat(22), 'Ep C', 1_200_000, '2026-10-27T10:00:00Z'), ...(world.extraEpisodes || []).map((e) => episode(...e))] } } } });
     if (body.operationName === 'getEpisodeOrChapter') return json({ data: { episodeUnionV2: null } });
     return json({ errors: [{ message: `unknown op ${body.operationName}` }] }, 400);
   }
   if (url.hostname === 'spclient.wg.spotify.com') return json({ playContexts: [{ uri: `spotify:show:${SHOW}`, lastPlayedTime: world.lastPlayed || NOW - 60_000 }] });
   if (url.hostname === 'www.youtube.com' && url.pathname === '/feed/history') {
-    const data = { contents: { twoColumnBrowseResultsRenderer: { tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [{ itemSectionRenderer: { header: { itemSectionHeaderRenderer: { title: { simpleText: 'Today' } } }, contents: [lockup(V1, 'Ep A: The Future of Agents', '1:00:06', world.history[V1]), lockup(V2, 'Something else entirely', '12:00', world.history[V2])] } }] } } } }] } } };
+    const data = { contents: { twoColumnBrowseResultsRenderer: { tabs: [{ tabRenderer: { content: { sectionListRenderer: { contents: [{ itemSectionRenderer: { header: { itemSectionHeaderRenderer: { title: { simpleText: 'Today' } } }, contents: [lockup(V1, 'Ep A: The Future of Agents', '1:00:06', world.history[V1]), lockup(V2, 'Something else entirely', '12:00', world.history[V2]), ...(world.extraHistory || []).map((v) => lockup(...v))] } }] } } } }] } } };
     const html = `<html><script>ytcfg.set({"INNERTUBE_CLIENT_VERSION":"2.20261101.00.00","LOGGED_IN":true,"VISITOR_DATA":"v1"});</script><script>var ytInitialData = ${JSON.stringify(data)};</script></html>`;
     const headers = new Headers({ 'content-type': 'text/html' });
     headers.append('set-cookie', `__Secure-1PSIDTS=${world.rotate}; Domain=.youtube.com; Path=/; Secure`);
@@ -60,7 +62,8 @@ async function fakeFetch(input, init = {}) {
   }
   if (url.hostname === 'www.youtube.com' && url.pathname.startsWith('/youtubei/v1/search')) {
     const q = JSON.parse(init.body).query;
-    const hits = /Ep A/.test(q) ? [{ videoRenderer: { videoId: V1, title: { runs: [{ text: 'Ep A: The Future of Agents' }] }, lengthText: { simpleText: '1:00:06' }, ownerText: { runs: [{ text: 'Test Show', navigationEndpoint: { browseEndpoint: { browseId: 'UC' + 'x'.repeat(22) } } }] } } }] : [];
+    const video = (id, title, len) => ({ videoRenderer: { videoId: id, title: { runs: [{ text: title }] }, lengthText: { simpleText: len }, ownerText: { runs: [{ text: 'Test Show', navigationEndpoint: { browseEndpoint: { browseId: 'UC' + 'x'.repeat(22) } } }] } } });
+    const hits = /Ep A/.test(q) ? [video(V1, 'Ep A: The Future of Agents', '1:00:06')] : /Ep D/.test(q) ? [video(V4, 'Ep D: Robots at Home', '25:00')] : [];
     return json({ contents: { items: hits } });
   }
   if (url.hostname === 'www.youtube.com') return json({});
@@ -139,6 +142,29 @@ test('a change that could not be stored is read again on the next sync', async (
   const r2 = await M.syncAll({ deadline: Date.now() + 60_000 });
   assert.equal(r2.spotify.events, 1, 'not forgotten');
   assert.equal((await E.lookupRefs([`sp:${E1}`]))[`sp:${E1}`].resume.pos, 3000);
+});
+
+test('episodes a rushed sync could not pair wait in a queue and are paired on the next run', async () => {
+  world.extraEpisodes = [[E4, 'Ep D: Robots at Home', 1_500_000, '2026-11-12T10:00:00Z']];
+  world.played[E4] = [300_000, 'IN_PROGRESS'];
+  world.extraHistory = [[V4, 'Ep D: Robots at Home', '25:00', 20]];
+  world.lastPlayed = Date.now();
+  // Too close to the deadline for lookups: both plays are saved, the twin search waits.
+  const r1 = await M.syncAll({ deadline: Date.now() + 15_000 });
+  assert.equal(r1.spotify.events, 1);
+  assert.equal(r1.youtube.events, 1);
+  assert.equal(r1.paired, undefined);
+  assert.equal(r1.toPair, 2);
+  let f = await E.lookupRefs([`sp:${E4}`, `yt:${V4}`]);
+  assert.notEqual(f[`sp:${E4}`].id, f[`yt:${V4}`].id);
+  // Nothing new to read next time, but the queue is worked through.
+  const r2 = await M.syncAll({ deadline: Date.now() + 60_000 });
+  assert.equal(r2.spotify.events, 0);
+  assert.ok(r2.paired >= 1);
+  assert.equal(r2.toPair, undefined, 'queue drained');
+  f = await E.lookupRefs([`sp:${E4}`, `yt:${V4}`]);
+  assert.equal(f[`sp:${E4}`].id, f[`yt:${V4}`].id, 'one episode on both platforms');
+  assert.equal(f[`sp:${E4}`].resume.pos, 300);
 });
 
 test('an expired Spotify sign-in is reported, and YouTube keeps syncing', async () => {
