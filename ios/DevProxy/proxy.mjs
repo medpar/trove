@@ -4,8 +4,9 @@
 //   node ios/DevProxy/proxy.mjs            # http://127.0.0.1:8787
 //
 // Reads go to the server in ~/.config/trove/config.json (the trove CLI login) with that key, which never
-// leaves this process. Edits, deletes, saves, uploads, highlights and feed changes are applied to an
-// in-memory overlay only, so testing the app can't change your library. Sign in to the app with
+// leaves this process. Edits, deletes, saves, uploads, highlights, feed changes and episodes marked in
+// Shows are applied to an in-memory overlay only (a Shows sync is answered without running), so testing
+// the app can't change your library. Sign in to the app with
 // server http://127.0.0.1:8787 and the test credentials below (test values, valid only for this proxy).
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -27,6 +28,8 @@ const deleted = new Set();
 const created = []; // fabricated items, newest first
 const extraHighlights = new Map(); // id -> [{text, note}]
 let feedPatch = { removed: new Set(), added: [], autosave: new Map() };
+const episodeCards = new Map(); // Shows: card id -> episode card marked here (or created to be marked)
+const episodeRefs = new Map(); // "sp:<id>" / "yt:<id>" -> id of a card created here
 
 const json = (res, status, body, headers = {}) => {
   res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...headers });
@@ -52,6 +55,34 @@ async function upstream(path, init = {}) {
 }
 
 const applyAsk = (d) => ({ ...d, sources: applyList(d.sources || []) });
+
+// Shows: episodes marked (or created) here replace the server's copy in every list.
+const applyCard = (c) => (c && episodeCards.has(c.id) ? episodeCards.get(c.id) : c);
+function applyMedia(data) {
+  if (Array.isArray(data.continue) && Array.isArray(data.finished)) {
+    const listed = [...data.continue, ...data.finished];
+    const all = [...listed.map(applyCard), ...[...episodeCards.values()].filter((c) => !listed.some((l) => l.id === c.id))];
+    data.continue = all.filter((c) => c.status === 'started');
+    const marked = all.filter((c) => c.status === 'finished' && episodeCards.has(c.id)).sort((a, b) => (b.finishedAt || 0) - (a.finishedAt || 0));
+    data.finished = [...marked, ...all.filter((c) => c.status === 'finished' && !episodeCards.has(c.id))].slice(0, 12);
+  }
+  if (Array.isArray(data.episodes)) {
+    data.episodes = data.episodes.map((r) => {
+      const made = (r.sp && episodeRefs.get(`sp:${r.sp.id}`)) || (r.yt && episodeRefs.get(`yt:${r.yt.id}`));
+      return { ...r, card: applyCard(r.card) || (made ? episodeCards.get(made) : null) };
+    });
+  }
+  if (Array.isArray(data.cards)) data.cards = data.cards.map(applyCard);
+  if (data.card) data.card = applyCard(data.card);
+  return data;
+}
+
+/** What "Mark as finished" / "Not finished" does to a card (web/lib/episodes.ts patchEpisode, simplified). */
+function markCard(card, status) {
+  if (status === 'finished') return { ...card, status: 'finished', pct: 1, finishedAt: Date.now(), doneOn: 'manual', resume: null };
+  if (status === 'unfinished') return { ...card, status: 'new', pct: 0, finishedAt: null, doneOn: null, resume: null };
+  return card;
+}
 const applyItem = (it) => (it && overlay.has(it.id) ? { ...it, ...overlay.get(it.id) } : it);
 const applyList = (items = []) => items.filter((i) => !deleted.has(i.id)).map(applyItem);
 
@@ -200,6 +231,52 @@ async function handle(req, res) {
     }
   }
 
+  // Shows. A sync would write what Spotify and YouTube report into Notion: answer as the server does, without syncing.
+  if (path === '/api/media/sync') {
+    if (!/^(1|true)$/.test(url.searchParams.get('wait') || '')) return json(res, 202, { ok: true, started: true, simulated: true });
+    const status = await (await upstream('/api/media/connect')).json().catch(() => ({}));
+    await new Promise((r) => setTimeout(r, 1500));
+    const out = { updated: 0, simulated: true };
+    if (status.spotify?.connected) out.spotify = { events: 0 };
+    if (status.youtube?.connected) out.youtube = { events: 0 };
+    return json(res, 200, out);
+  }
+
+  if ((m = path.match(/^\/api\/media\/episodes\/([^/]+)$/)) && method === 'PATCH') {
+    const id = m[1];
+    const body = JSON.parse((await readBody(req)).toString() || '{}');
+    let card = episodeCards.get(id);
+    if (!card) {
+      const r = await upstream(`/api/media/episodes/${id}`);
+      const data = await r.json().catch(() => ({ error: 'Not found' }));
+      if (!r.ok) return json(res, r.status, data);
+      card = data.card;
+    }
+    card = markCard(card, body.status);
+    episodeCards.set(id, card);
+    await new Promise((r) => setTimeout(r, 400));
+    return json(res, 200, { card });
+  }
+
+  // Episodes never played have no record yet: the apps create one before marking it.
+  if (path === '/api/media/events' && method === 'POST') {
+    const body = JSON.parse((await readBody(req)).toString() || '{}');
+    const cards = (Array.isArray(body.events) ? body.events : [body]).filter((e) => e && (e.p === 'sp' || e.p === 'yt') && e.id).map((e) => {
+      const known = episodeRefs.get(`${e.p}:${e.id}`);
+      if (known) return episodeCards.get(known);
+      const card = {
+        id: `dev-ep-${randomUUID()}`, title: e.title || 'Untitled', show: e.show || null, series: null, image: null, released: e.released || null,
+        yt: null, sp: null, status: 'new', pct: 0, finishedAt: null, doneOn: null, resume: null, last: null, updated: new Date().toISOString(), notionUrl: 'https://www.notion.so',
+      };
+      card[e.p] = { id: e.id, dur: e.dur || null, title: e.title || null };
+      if (e.twin && (e.twin.p === 'sp' || e.twin.p === 'yt') && e.twin.p !== e.p) card[e.twin.p] = { id: e.twin.id, dur: null, title: null };
+      episodeCards.set(card.id, card);
+      for (const p of ['sp', 'yt']) if (card[p]) episodeRefs.set(`${p}:${card[p].id}`, card.id);
+      return card;
+    });
+    return json(res, 200, { cards });
+  }
+
   if (method === 'PUT' && path === '/dev-blob') {
     await readBody(req);
     return json(res, 200, {});
@@ -231,6 +308,7 @@ async function handle(req, res) {
     const data = await r.json();
     if (Array.isArray(data.items)) data.items = applyList(data.items);
     if (Array.isArray(data.sources)) data.sources = applyList(data.sources);
+    if (path.startsWith('/api/media/')) applyMedia(data);
     if (path === '/api/items' && !url.searchParams.get('cursor') && !url.searchParams.get('q') && [...url.searchParams.keys()].every((k) => ['sort', 'limit'].includes(k))) {
       data.items = [...created.map(applyItem).filter((i) => !deleted.has(i.id)), ...data.items];
     }

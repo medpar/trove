@@ -106,4 +106,5 @@ nonisolated enum Sort: String, CaseIterable, Codable, Sendable, Identifiable {
 nonisolated enum Destination: Hashable, Codable, Sendable {
     case scope(Scope)
     case feeds
+    case shows
 }

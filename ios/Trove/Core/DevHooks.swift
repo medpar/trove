@@ -22,8 +22,12 @@ enum DevHooks {
     static var readerScroll: Double? { value("SCROLL").flatMap(Double.init) }
 
     @MainActor static func apply(_ router: Router, library: Library) {
+        // Shows: SHOW=<followed show id> (or "continue"); SERIES, FILTER (new|started|finished), PLAY and MARK
+        // (an episode key) are read by ShowsView.
+        if let show = value("SHOW") { UserDefaults.standard.set(show, forKey: "showsTab") }
         if let dest = value("DEST") {
             if dest == "feeds" { router.destination = .feeds }
+            else if dest == "shows" { router.destination = .shows }
             else if dest.hasPrefix("collection:") { router.destination = .scope(.collection(String(dest.dropFirst(11)))) }
             else if dest.hasPrefix("tag:") { router.destination = .scope(.tag(String(dest.dropFirst(4)))) }
             else if dest.hasPrefix("type:") { router.destination = .scope(.type(String(dest.dropFirst(5)))) }

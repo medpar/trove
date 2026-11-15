@@ -17,6 +17,8 @@ struct MainView: View {
                     ItemListView(scope: scope).id(scope)
                 case .feeds?:
                     FeedsView()
+                case .shows?:
+                    ShowsView()
                 case nil:
                     ContentUnavailableView("Pick a list", systemImage: "sidebar.left", description: Text("Choose a collection, tag or filter in the sidebar."))
                 }
@@ -28,7 +30,7 @@ struct MainView: View {
                     if let id = router.selectedID {
                         ItemDetailView(id: id, seed: router.seed).id(id)
                     } else {
-                        EmptyDetail()
+                        EmptyDetail(shows: router.destination == .shows)
                     }
                 }
                 .navigationDestination(for: Item.self) { item in
@@ -81,6 +83,9 @@ struct SheetHost: View {
 }
 
 struct EmptyDetail: View {
+    /// In Shows, episodes open in the Spotify or YouTube app rather than here.
+    var shows = false
+
     var body: some View {
         VStack(spacing: 14) {
             Image("AppIconImage")
@@ -88,12 +93,14 @@ struct EmptyDetail: View {
                 .frame(width: 56, height: 56)
                 .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
                 .opacity(0.9)
-            Text("Select something to read")
+            Text(shows ? "Pick up where you left off" : "Select something to read")
                 .font(.headline)
-            Text("Articles, videos, posts and notes open here.")
+            Text(shows ? "Episodes open in the Spotify or YouTube app, at the time you stopped." : "Articles, videos, posts and notes open here.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
+        .padding(.horizontal, 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(.systemBackground))
     }

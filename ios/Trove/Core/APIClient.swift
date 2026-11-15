@@ -286,4 +286,37 @@ nonisolated extension APIClient {
     func unsubscribe(_ id: String) async throws {
         _ = try await raw(makeRequest("DELETE", "/api/feeds", query: [.init(name: "id", value: id)]))
     }
+
+    // Shows (web/app/api/media)
+
+    /// Followed shows, episodes in progress anywhere and recently finished ones.
+    func mediaShows() async throws -> ShowsOverview {
+        try await send(makeRequest("/api/media/shows", timeout: 90))
+    }
+
+    /// Every episode of a followed show, paired across Spotify and YouTube, with your progress.
+    func mediaShow(_ id: String) async throws -> ShowDetail {
+        try await send(makeRequest("/api/media/shows/\(id)", timeout: 90))
+    }
+
+    func mediaSyncStatus() async throws -> MediaSyncStatus {
+        try await send(makeRequest("/api/media/connect"))
+    }
+
+    /// Reads what you played on Spotify and YouTube on every device. Without `wait` the server answers
+    /// at once and syncs right after.
+    func mediaSync(wait: Bool) async throws -> MediaSyncResult {
+        let query: [URLQueryItem] = wait ? [.init(name: "wait", value: "1")] : []
+        return try await send(makeRequest("POST", "/api/media/sync", query: query, timeout: wait ? 300 : 30))
+    }
+
+    func markEpisode(_ id: String, finished: Bool) async throws -> EpisodeCard {
+        let body: JSONValue = ["status": .string(finished ? "finished" : "unfinished")]
+        return try await send(makeRequest("PATCH", "/api/media/episodes/\(id)", json: body), as: EpisodeCardEnvelope.self).card
+    }
+
+    /// Stores an episode you never played, so it can be marked.
+    func createEpisode(_ event: [String: JSONValue]) async throws -> EpisodeCard? {
+        try await send(makeRequest("POST", "/api/media/events", json: ["events": [.object(event)]]), as: EpisodeCardsEnvelope.self).cards.first
+    }
 }

@@ -21,6 +21,8 @@ struct SidebarView: View {
                 if let n = stats?.reminders, n > 0 { row(.reminders, count: n) }
                 Label("Feeds", systemImage: "dot.radiowaves.up.forward")
                     .tag(Destination.feeds)
+                Label("Shows", systemImage: "headphones")
+                    .tag(Destination.shows)
             }
 
             Section("Collections") {
