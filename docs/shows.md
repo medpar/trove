@@ -45,7 +45,7 @@ Both sign-ins are private APIs: they can change without notice. Trove re-learns 
 
 1. Deploy (push `main`). The Episodes database is created next to the Trove database on first use (or set `TROVE_EPISODES_DS`).
 2. Reload the extension (2.4.0): it asks for access to open.spotify.com.
-3. Connect the sign-ins: extension settings → YouTube & Spotify progress → **Connect Spotify**; for YouTube, sign in to youtube.com in a private window (allow Trove in private windows) and click **Connect from private window**, then close the window. Or paste them in Trove → Settings → Shows. Environment variables `SPOTIFY_SP_DC` and `YOUTUBE_COOKIES` work too.
+3. Connect the sign-ins: in the extension’s settings → YouTube & Spotify, click **Connect** next to Spotify; next to YouTube click **Set up** and follow its three steps (allow Trove in private windows, sign in to youtube.com in a private window, connect), then close that window. Or paste them in Trove → Settings → Shows. Environment variables `SPOTIFY_SP_DC` and `YOUTUBE_COOKIES` work too.
 4. Follow your shows (Shows → Follow a show → the Spotify show link; the YouTube channel is found by itself).
 5. Hourly sync: redeploy `workers/ai` (`wrangler deploy`); it uses its existing `TROVE_ENRICH_KEY`.
 6. Optional, iPhone: Shortcuts → Automation → App → Spotify, YouTube → Is Closed → Run Immediately → Get Contents of URL `https://<your trove>/api/media/sync?key=<api key>`, method POST.

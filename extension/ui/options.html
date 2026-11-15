@@ -5,222 +5,294 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Trove settings</title>
   <link rel="stylesheet" href="style.css" />
-  <style>
-    body { padding: 32px 16px 64px; }
-    main { max-width: 760px; margin: 0 auto; display: grid; gap: 18px; }
-    header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-    header img { width: 40px; height: 40px; }
-    header h1 { font-size: 22px; }
-    header p { margin: 2px 0 0; }
-    section.card { padding: 18px; display: grid; gap: 14px; }
-    section h2 { font-size: 15px; }
-    .field { display: grid; grid-template-columns: 200px 1fr; gap: 6px 16px; align-items: start; }
-    .field > label { font-weight: 600; padding-top: 7px; }
-    .field .help { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: -2px; }
-    .switch { display: flex; gap: 10px; align-items: flex-start; }
-    .switch input { margin-top: 3px; accent-color: var(--accent); width: 15px; height: 15px; }
-    .switch b { font-weight: 600; display: block; }
-    .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-    .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; }
-    .kv dt { color: var(--muted); }
-    .kv dd { margin: 0; }
-    .msg { font-size: 12.5px; }
-    .msg.ok { color: var(--ok); }
-    .msg.err { color: var(--err); }
-    #parents { display: grid; gap: 4px; max-height: 220px; overflow: auto; }
-    #parents button { text-align: left; font-weight: 500; }
-    #log { font-family: var(--mono); font-size: 11.5px; max-height: 320px; overflow: auto; display: grid; gap: 2px; }
-    #log .e { color: var(--err); }
-    #log .w { color: var(--warn); }
-    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
-    @media (max-width: 640px) {
-      .field { grid-template-columns: 1fr; }
-      .field .help { grid-column: 1; }
-      .field > label { padding-top: 0; }
-    }
-    [hidden] { display: none !important; }
-  </style>
+  <link rel="stylesheet" href="settings.css" />
 </head>
 <body>
-<main>
-  <header>
-    <img src="../icons/icon128.png" alt="" />
-    <div>
-      <h1>Trove</h1>
-      <p class="muted">Save anything, keep everything — pages, links, highlights, browser bookmarks and your X bookmarks.</p>
+<div class="shell">
+  <aside class="side">
+    <div class="brand">
+      <img src="../icons/icon48.png" alt="" />
+      <div><strong>Trove</strong><span class="muted" id="version"></span></div>
     </div>
-  </header>
+    <nav aria-label="Settings">
+      <a class="navlink" href="#account">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+        Account
+      </a>
+      <a class="navlink" href="#media">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"/></svg>
+        YouTube &amp; Spotify
+      </a>
+      <a class="navlink" href="#saving">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16z"/></svg>
+        Save &amp; sync
+      </a>
+      <a class="navlink" href="#x">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4l16 16M20 4 4 20"/></svg>
+        X bookmarks
+      </a>
+      <a class="navlink" href="#activity">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+        Activity
+      </a>
+    </nav>
+    <span id="connPill" class="pill"><span class="dot"></span><span id="connPillText">…</span></span>
+  </aside>
 
-  <section class="card" id="trove">
-    <h2>Trove app</h2>
-    <div class="field">
-      <label for="troveUrl">App URL</label>
-      <input id="troveUrl" type="text" placeholder="https://trove.mariomedpar.com" />
-    </div>
-    <div class="field">
-      <label for="troveKey">API key</label>
-      <div class="row">
-        <input id="troveKey" type="password" placeholder="trv_… (Trove → Settings → API keys)" autocomplete="off" />
-        <button id="saveTrove">Connect</button>
-      </div>
-      <div class="help">Pages, links, images and highlights are saved through your Trove app. <span id="troveMsg" class="msg"></span></div>
-    </div>
-  </section>
-
-  <section class="card">
-    <h2>Browser bookmarks</h2>
-    <label class="switch"><input type="checkbox" id="syncBrowserBookmarks" /><span><b>Save new browser bookmarks to Trove</b><span class="muted">Whenever you bookmark a page in this browser (⌘D), it's archived too, under the Browser bookmarks collection with your folders inside it.</span></span></label>
-    <div class="actions"><button id="importBookmarks">Import all browser bookmarks</button><span id="bmMsg" class="msg muted"></span></div>
-  </section>
-
-  <section class="card">
-    <h2>Pinterest</h2>
-    <label class="switch"><input type="checkbox" id="syncPinterest" /><span><b>Keep my Pinterest saves in sync</b><span class="muted">Every few hours, pins you save on pinterest.com are archived to Trove with their image, under the Pinterest collection with one sub-collection per board. Pins you move to another board move too. Uses your Pinterest login in this browser.</span></span></label>
-    <div class="actions"><button id="syncPinterestNow">Import all pins</button><span id="pinMsg" class="msg muted"></span></div>
-  </section>
-
-  <section class="card" id="watch">
-    <h2>YouTube &amp; Spotify progress</h2>
-    <p class="muted" style="margin: -4px 0 0">Trove tracks what you actually play on youtube.com and open.spotify.com (skips and ads don't count, closing the tab loses nothing), pairs the YouTube video and the Spotify episode of the same show, and marks what you've started or finished on both sites. Your episodes are in Trove → Shows and in the Episodes database in Notion.</p>
-    <div class="grid2">
-      <label class="switch"><input type="checkbox" id="watchYouTube" /><span><b>Track YouTube</b><span class="muted">Every video you play on youtube.com (not Shorts).</span></span></label>
-      <label class="switch"><input type="checkbox" id="watchSpotify" /><span><b>Track the Spotify web player</b><span class="muted">Podcast episodes you play on open.spotify.com (music is ignored).</span></span></label>
-      <label class="switch"><input type="checkbox" id="watchBadges" /><span><b>Mark videos and episodes</b><span class="muted">“✓ Watched on Spotify”, “◐ 34% · 23:14” on thumbnails and episode lists, with a Resume button on the video or episode page.</span></span></label>
-      <label class="switch"><input type="checkbox" id="watchDim" /><span><b>Dim what you've finished</b><span class="muted">Finished thumbnails fade so new ones stand out.</span></span></label>
-    </div>
-    <div class="field">
-      <label>In this browser</label>
-      <div>
-        <div id="watchInfo" class="muted">…</div>
-        <div class="actions" style="margin-top: 8px"><button id="watchRefresh">Refresh now</button></div>
-      </div>
-    </div>
-    <div class="field">
-      <label>Phone &amp; tablet</label>
-      <div>
-        <dl class="kv" id="serverInfo"><dt>Server sync</dt><dd class="muted">…</dd></dl>
-        <div class="actions" style="margin-top: 8px">
-          <button id="sendSpotify">Connect Spotify</button>
-          <button id="sendYouTube">Connect YouTube</button>
-          <button id="sendPrivate" hidden>Connect from private window</button>
+  <main>
+    <!-- Account -->
+    <section class="section" id="account">
+      <header class="section-head">
+        <h2>Account</h2>
+        <p>Your Trove app. Pages you save and what you play on YouTube and Spotify go there.</p>
+      </header>
+      <div class="panel">
+        <div class="conn" id="connView">
+          <span class="dot" id="connDot"></span>
+          <div class="conn-text"><strong id="connTitle">Checking…</strong><span id="connSub"></span></div>
+          <button id="connChange">Change</button>
         </div>
-        <div id="sendMsg" class="msg"></div>
+        <form class="form" id="connForm" hidden>
+          <div class="field">
+            <label for="troveUrl">App URL</label>
+            <input id="troveUrl" type="url" placeholder="https://trove.mariomedpar.com" autocomplete="url" />
+          </div>
+          <div class="field">
+            <label for="troveKey">API key</label>
+            <input id="troveKey" type="password" autocomplete="off" placeholder="Paste a key" />
+            <p class="hint">In Trove: Settings → Developers → API keys.</p>
+          </div>
+          <div class="form-actions">
+            <button class="primary" type="submit" id="saveTrove">Connect</button>
+            <button class="ghost" type="button" id="connCancel">Cancel</button>
+            <span id="troveMsg" class="msg" role="status"></span>
+          </div>
+        </form>
       </div>
-      <div class="help">So Trove's server can read what you play on your iPhone and iPad (Spotify's played state and your YouTube watch history) with this browser closed, it needs your Spotify and YouTube sign-ins; they are sent to your Trove app only and kept encrypted. For YouTube, sign in in a private window (allow Trove in private windows on the extensions page), click <b>Connect from private window</b>, then close that window: a session no browser uses lasts much longer.</div>
-    </div>
-  </section>
+    </section>
 
-  <section class="card" id="notion">
-    <h2>Notion database</h2>
-    <p class="muted" style="margin: -4px 0 12px">Your X bookmarks are archived in your Trove database as the “X bookmark” type, next to everything else you save.</p>
-    <div class="field">
-      <label for="token">Integration token</label>
-      <div class="row">
-        <input id="token" type="password" placeholder="ntn_… or secret_…" autocomplete="off" />
-        <button id="saveToken">Save</button>
-      </div>
-      <div class="help">Create a free internal integration at <a href="https://www.notion.so/profile/integrations" target="_blank">notion.so/profile/integrations</a> and paste its secret. <span id="tokenMsg" class="msg"></span></div>
-    </div>
-    <div class="field">
-      <label>Database</label>
-      <div>
-        <div id="dbInfo" class="muted">Not connected</div>
-        <div class="actions" style="margin-top: 8px">
-          <button id="showCreate">Create new database…</button>
-          <button id="showUse">Use existing…</button>
+    <!-- YouTube & Spotify -->
+    <section class="section" id="media">
+      <header class="section-head">
+        <h2>YouTube &amp; Spotify</h2>
+        <p>Know which episodes you’ve already watched or heard, and where you stopped, whichever platform or device you used.</p>
+      </header>
+
+      <div class="panel">
+        <h3 class="panel-title">In this browser</h3>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="watchYouTube">Track YouTube</label><p class="srow-desc">Every video you play on youtube.com (not Shorts). Skipping ahead and ads don’t count as watched.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="watchYouTube" /></label></div>
         </div>
-      </div>
-    </div>
-    <div id="createBox" class="card" hidden>
-      <div class="row"><input id="parentQuery" type="text" placeholder="Search a parent page (the integration must have access)" /><button id="searchParents">Search</button></div>
-      <div id="parents"></div>
-      <div class="muted msg">Tip: open the parent page in Notion → ••• → Connections → add your integration, so it shows up here.</div>
-    </div>
-    <div id="useBox" class="card" hidden>
-      <div class="row"><input id="dbLink" type="text" placeholder="Paste the database link or ID" /><button id="useDb">Connect</button></div>
-      <div class="muted msg">Missing columns are added automatically.</div>
-    </div>
-    <div id="dbMsg" class="msg"></div>
-  </section>
-
-  <section class="card">
-    <h2>2 · Sync</h2>
-    <div class="field">
-      <label for="interval">Check for new bookmarks</label>
-      <select id="interval">
-        <option value="5">Every 5 minutes</option>
-        <option value="15">Every 15 minutes</option>
-        <option value="30">Every 30 minutes</option>
-        <option value="60">Every hour</option>
-        <option value="180">Every 3 hours</option>
-        <option value="720">Every 12 hours</option>
-      </select>
-      <div class="help">New bookmarks made on x.com in this browser are archived within seconds anyway.</div>
-    </div>
-    <div class="field">
-      <label>Full archive</label>
-      <div>
-        <div id="bfInfo" class="muted"></div>
-        <div class="actions" style="margin-top: 8px">
-          <button id="bfStart" class="primary">Start</button>
-          <button id="bfStop">Stop</button>
-          <button id="bfRestart">Re-scan everything</button>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="watchSpotify">Track the Spotify web player</label><p class="srow-desc">Podcast episodes you play on open.spotify.com. Music is ignored.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="watchSpotify" /></label></div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="watchBadges">Mark what you’ve seen</label><p class="srow-desc">“✓ Watched on Spotify” or “◐ 34% · 15:03” on thumbnails and episode lists, with Resume on the video or episode page.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="watchBadges" /></label></div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="watchDim">Fade finished thumbnails</label><p class="srow-desc">So the ones you haven’t seen stand out.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="watchDim" /></label></div>
+        </div>
+        <div class="panel-foot">
+          <span id="watchInfo" class="muted">…</span>
+          <span class="spacer"></span>
+          <button class="ghost sm" id="watchRefresh">Refresh</button>
         </div>
       </div>
-      <div class="help">Walks your whole bookmark list. Already-archived posts are skipped, so re-scanning never creates duplicates.</div>
-    </div>
-    <div class="field">
-      <label>Duplicate protection</label>
-      <div>
-        <div id="indexInfo" class="muted"></div>
-        <div class="actions" style="margin-top: 8px"><button id="rebuild">Rebuild index from Notion</button></div>
+
+      <div class="panel">
+        <h3 class="panel-title">iPhone, iPad and other devices</h3>
+        <p class="panel-desc">Trove’s server reads what you play in the Spotify and YouTube apps, every hour and whenever you open Shows, using your sign-ins. They go only to your Trove and are kept encrypted. No Premium or API keys needed.</p>
+        <div class="svc">
+          <span class="svc-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#1ed760"/><path d="M6.6 9.4c3.7-1.1 7.9-.8 11 1M7.3 12.6c3-.8 6.4-.5 8.9.9M8 15.6c2.3-.6 4.9-.4 6.8.7" stroke="#000" stroke-width="1.6" stroke-linecap="round" fill="none"/></svg></span>
+          <div class="svc-text"><strong>Spotify</strong><span class="svc-status"><span class="dot" id="spDot"></span><span id="spStatus">…</span></span></div>
+          <button class="primary sm" id="spConnect">Connect</button>
+        </div>
+        <div class="svc">
+          <span class="svc-logo" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="1.5" y="4.5" width="21" height="15" rx="4.5" fill="#ff0033"/><path d="M10 8.6v6.8l5.6-3.4z" fill="#fff"/></svg></span>
+          <div class="svc-text"><strong>YouTube</strong><span class="svc-status"><span class="dot" id="ytDot"></span><span id="ytStatus">…</span></span></div>
+          <button class="primary sm" id="ytSetup" aria-expanded="false" aria-controls="ytGuide">Set up</button>
+        </div>
+        <div class="guide" id="ytGuide" hidden>
+          <ol class="steps">
+            <li class="step" id="step1">
+              <span class="step-num">1</span>
+              <div><strong>Allow Trove in private windows</strong><p>On Trove’s details page, turn on “Allow in Private”, then come back here.</p></div>
+              <button class="sm" id="step1Btn">Open details</button>
+            </li>
+            <li class="step" id="step2">
+              <span class="step-num">2</span>
+              <div><strong>Sign in to YouTube in a private window</strong><p>A sign-in only Trove uses keeps working much longer than your everyday one.</p></div>
+              <button class="sm" id="step2Btn">Open private window</button>
+            </li>
+            <li class="step" id="step3">
+              <span class="step-num">3</span>
+              <div><strong>Connect</strong><p id="step3Text">Trove checks the sign-in and keeps it. Then you can close the private window.</p></div>
+              <button class="primary sm" id="step3Btn" disabled>Connect YouTube</button>
+            </li>
+          </ol>
+          <p class="guide-alt">Or <button class="link" id="ytUseMain">use this browser’s YouTube sign-in</button>: quicker, but YouTube may end a sign-in used from two places.</p>
+        </div>
+        <p class="msg" id="svcMsg" role="status" style="padding: 0 18px 14px"></p>
       </div>
-      <div class="help">Trove remembers every archived post id. Rebuilding re-reads the database (useful on a new browser).</div>
-    </div>
-  </section>
+    </section>
 
-  <section class="card">
-    <h2>3 · What to keep</h2>
-    <div class="grid2">
-      <label class="switch"><input type="checkbox" id="archiveMedia" /><span><b>Archive media in Notion</b><span class="muted">Copies photos, videos and GIFs into Notion, so they survive deletion on X.</span></span></label>
-      <label class="switch"><input type="checkbox" id="replyContext" /><span><b>Keep reply context</b><span class="muted">For replies, also save the post being replied to.</span></span></label>
-      <label class="switch"><input type="checkbox" id="rawJson" /><span><b>Include raw data</b><span class="muted">A collapsed JSON copy of everything Trove captured.</span></span></label>
-      <label class="switch"><input type="checkbox" id="notify" /><span><b>Notifications</b><span class="muted">For manual saves and problems that need you.</span></span></label>
-    </div>
-    <div class="field">
-      <label for="threads">Threads</label>
-      <select id="threads">
-        <option value="smart">Smart — unroll posts that look like threads</option>
-        <option value="always">Always check for a thread (slower)</option>
-        <option value="off">Never (tick “Unroll thread” in Notion to fetch one)</option>
-      </select>
-    </div>
-    <div class="field">
-      <label for="maxVideo">Max video size</label>
-      <div class="row"><input id="maxVideo" type="number" min="5" max="5000" step="5" style="width: 110px" /><span class="muted">MB — larger videos keep the best quality that fits.</span></div>
-    </div>
-  </section>
+    <!-- Save & sync -->
+    <section class="section" id="saving">
+      <header class="section-head">
+        <h2>Save &amp; sync</h2>
+        <p>Keep Trove in step with your browser bookmarks and Pinterest.</p>
+      </header>
+      <div class="panel">
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="syncBrowserBookmarks">Save new browser bookmarks</label><p class="srow-desc">Whatever you bookmark (⌘D) is archived too, under Browser bookmarks with your folders inside. Moving or renaming a bookmark updates it in Trove.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="syncBrowserBookmarks" /></label></div>
+        </div>
+        <div class="sub"><button class="sm" id="importBookmarks">Import all bookmarks</button><span id="bmMsg" class="msg muted" role="status"></span></div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="syncPinterest">Keep Pinterest in sync</label><p class="srow-desc">Every few hours, pins you save are archived with their image, one collection per board. Uses your Pinterest login in this browser.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="syncPinterest" /></label></div>
+        </div>
+        <div class="sub"><button class="sm" id="syncPinterestNow">Import all pins</button><span id="pinMsg" class="msg muted" role="status"></span></div>
+      </div>
+    </section>
 
-  <section class="card">
-    <h2>4 · Auto-tags</h2>
-    <textarea id="rules" spellcheck="false" placeholder="AI: openai, anthropic, llm, @karpathy, arxiv.org, /\bgpt-?\d/i&#10;Design: figma, dribbble.com, type:Photo&#10;Read later: type:Article, type:Thread"></textarea>
-    <div class="muted msg">One rule per line: <span class="mono">Tag: matcher, matcher…</span> — a keyword, <span class="mono">@handle</span>, a domain, <span class="mono">/regex/i</span> or <span class="mono">type:Video</span>. Tags go to the “Tags” column.</div>
-    <div class="row"><button id="saveRules">Save rules</button><span id="rulesMsg" class="msg"></span></div>
-  </section>
+    <!-- X bookmarks -->
+    <section class="section" id="x">
+      <header class="section-head">
+        <h2>X bookmarks</h2>
+        <p>Your X bookmarks, archived with their threads and media into the Trove database in Notion, using your x.com login in this browser.</p>
+      </header>
 
-  <section class="card">
-    <h2>5 · X connection</h2>
-    <dl class="kv" id="xInfo"></dl>
-    <label class="switch"><input type="checkbox" id="removeFromX" /><span><b>Remove from X bookmarks after archiving</b><span class="muted">Keeps your X bookmarks at inbox-zero. Only removes posts that were archived successfully.</span></span></label>
-    <div class="actions"><button id="capture">Refresh X connection</button><button id="resetCapture" class="danger">Forget learned requests</button></div>
-    <div class="muted msg">Trove learns how to call X from your own x.com tabs (no passwords, no paid API). If nothing was learned yet, it briefly opens x.com in a background tab.</div>
-  </section>
+      <div class="panel">
+        <h3 class="panel-title">Notion</h3>
+        <div class="srow">
+          <div class="srow-text"><span class="srow-title">Integration token</span><p class="srow-desc" id="tokenInfo">…</p></div>
+          <div class="srow-control"><button class="sm" id="tokenChange">Change</button></div>
+        </div>
+        <form class="form" id="tokenForm" hidden style="padding-top: 0">
+          <div class="field">
+            <input id="token" type="password" placeholder="ntn_… or secret_…" autocomplete="off" aria-label="Notion integration token" />
+            <p class="hint">Create an internal integration at <a href="https://www.notion.so/profile/integrations" target="_blank">notion.so/profile/integrations</a> and paste its secret.</p>
+          </div>
+          <div class="form-actions"><button class="primary sm" type="submit" id="saveToken">Save token</button><span id="tokenMsg" class="msg" role="status"></span></div>
+        </form>
+        <div class="srow">
+          <div class="srow-text"><span class="srow-title">Database</span><p class="srow-desc" id="dbInfo">Not connected</p></div>
+          <div class="srow-control"><button class="sm" id="showCreate">Create new…</button><button class="sm" id="showUse">Use existing…</button></div>
+        </div>
+        <div class="picker" id="createBox" hidden>
+          <div class="row"><input id="parentQuery" type="text" placeholder="Search a page to create it in" aria-label="Search parent page" /><button class="sm" id="searchParents">Search</button></div>
+          <div class="picker-list" id="parents"></div>
+          <p class="hint">Tip: in Notion, open the page → ••• → Connections → add your integration, so it shows up here.</p>
+        </div>
+        <div class="picker" id="useBox" hidden>
+          <div class="row"><input id="dbLink" type="text" placeholder="Paste the database link or ID" aria-label="Database link" /><button class="primary sm" id="useDb">Connect</button></div>
+          <p class="hint">Missing columns are added automatically.</p>
+        </div>
+        <p class="msg" id="dbMsg" role="status" style="padding: 0 18px 14px"></p>
+      </div>
 
-  <section class="card" id="activity">
-    <div class="row"><h2>Activity</h2><span class="spacer"></span><button id="copyLog">Copy</button></div>
-    <div id="log"></div>
-  </section>
-</main>
+      <div class="panel">
+        <h3 class="panel-title">Sync</h3>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="interval">Check for new bookmarks</label><p class="srow-desc">Bookmarks you make on x.com in this browser are archived within seconds anyway.</p></div>
+          <div class="srow-control">
+            <select id="interval">
+              <option value="5">Every 5 minutes</option>
+              <option value="15">Every 15 minutes</option>
+              <option value="30">Every 30 minutes</option>
+              <option value="60">Every hour</option>
+              <option value="180">Every 3 hours</option>
+              <option value="720">Every 12 hours</option>
+            </select>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><span class="srow-title">Full archive</span><p class="srow-desc" id="bfInfo">…</p></div>
+          <div class="srow-control"><button class="primary sm" id="bfStart">Start</button><button class="sm" id="bfStop">Stop</button></div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><span class="srow-title">Duplicate protection</span><p class="srow-desc" id="indexInfo">…</p></div>
+          <div class="srow-control"><button class="sm" id="rebuild">Rebuild</button><button class="sm ghost" id="bfRestart" title="Walks your whole bookmark list again; archived posts are skipped">Re-scan all</button></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">What to keep</h3>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="archiveMedia">Archive media in Notion</label><p class="srow-desc">Photos, videos and GIFs are copied into Notion, so they survive deletion on X.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="archiveMedia" /></label></div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="replyContext">Keep reply context</label><p class="srow-desc">For replies, also save the post they answer.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="replyContext" /></label></div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="threads">Threads</label><p class="srow-desc">Whether to fetch the rest of a thread.</p></div>
+          <div class="srow-control">
+            <select id="threads">
+              <option value="smart">When it looks like a thread</option>
+              <option value="always">Always check</option>
+              <option value="off">Never</option>
+            </select>
+          </div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="notify">Notifications</label><p class="srow-desc">For things you save by hand and problems that need you.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="notify" /></label></div>
+        </div>
+        <div class="srow">
+          <div class="srow-text"><label class="srow-title" for="removeFromX">Remove from X after archiving</label><p class="srow-desc">Keeps your X bookmarks empty. Only posts archived successfully are removed.</p></div>
+          <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="removeFromX" /></label></div>
+        </div>
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <div class="srow">
+            <div class="srow-text"><label class="srow-title" for="rawJson">Include raw data</label><p class="srow-desc">A collapsed JSON copy of everything Trove captured.</p></div>
+            <div class="srow-control"><label class="toggle"><input type="checkbox" role="switch" id="rawJson" /></label></div>
+          </div>
+          <div class="srow">
+            <div class="srow-text"><label class="srow-title" for="maxVideo">Largest video</label><p class="srow-desc">Bigger videos keep the best quality that fits.</p></div>
+            <div class="srow-control"><input id="maxVideo" type="number" min="5" max="5000" step="5" style="width: 96px" /><span class="muted">MB</span></div>
+          </div>
+          <div class="srow" style="border-bottom: 0">
+            <div class="srow-text"><label class="srow-title" for="rules">Auto-tags</label><p class="srow-desc">One rule per line: <span class="mono">Tag: keyword, @handle, domain.com, /regex/i, type:Video</span></p></div>
+          </div>
+          <div class="rules">
+            <textarea id="rules" spellcheck="false" placeholder="AI: openai, anthropic, llm, @karpathy, arxiv.org&#10;Design: figma, dribbble.com, type:Photo"></textarea>
+            <div class="form-actions"><button class="sm" id="saveRules">Save rules</button><span id="rulesMsg" class="msg" role="status"></span></div>
+          </div>
+        </details>
+      </div>
+
+      <div class="panel">
+        <h3 class="panel-title">Connection to X</h3>
+        <dl class="kv" id="xInfo"></dl>
+        <div class="panel-foot">
+          <span class="muted">Trove learns how to call X from your own x.com tabs. No password, no paid API.</span>
+          <span class="spacer"></span>
+          <button class="sm" id="capture">Refresh</button>
+          <button class="sm ghost" id="resetCapture">Forget</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Activity -->
+    <section class="section" id="activity">
+      <header class="section-head" style="display: flex; align-items: end; gap: 12px">
+        <div><h2>Activity</h2><p>What the extension did lately, newest first.</p></div>
+        <span class="spacer"></span>
+        <button class="sm" id="copyLog">Copy</button>
+      </header>
+      <div class="panel"><div id="log"></div></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script type="module" src="options.js"></script>
 </body>
 </html>

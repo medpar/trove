@@ -38,13 +38,13 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 | **Brave / Chrome / Edge / Arc** (macOS, Windows, Linux) | The extension: toolbar button, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, right-click page / link / image / **selection → highlight**. It reads the page you're on, so logged-in and paywalled pages are archived too. Imports all browser bookmarks (folders → collections) and can auto-save new ones. Keeps syncing your **X bookmarks** with threads and media. |
 | **Pinterest** | The extension imports every pin on your boards (secret ones and quick saves too) with its image archived, one sub-collection per board, and keeps them in sync every few hours. Uses your Pinterest login in the browser; no API keys. |
 | **Telegram** (every device) | Send or forward anything to your bot: links, text, photos, videos, voice notes, files. For a YouTube video or Spotify episode it also tells you whether you already watched or heard it, on either platform. `#tags`, `@Collection`, `!fav` in the message; buttons to move, tag, favorite or delete; reply to a card to edit it. `? query` searches, `?? question` asks, `@yourbot query` shares a saved link in any chat, and mentioning the bot in a reply in any chat saves that message. On iPhone, iPad and Mac, Share → Telegram → your bot works from every app. |
-| **iPhone, iPad, Mac** | Four signed Shortcuts (Settings → Save from anywhere): **Save to Trove** (Share sheet: links, pages, text, photos, PDFs, files), **Save to Trove with Details** (pick collection, tags, note), **Trove Quick Save** (clipboard; for the Action Button, Back Tap, Control Center, Siri and a Mac hotkey) and **Trove Note** (dictate a thought). Each asks for your API key once. |
+| **iPhone, iPad, Mac** | Four signed Shortcuts (Settings → Ways to save): **Save to Trove** (Share sheet: links, pages, text, photos, PDFs, files), **Save to Trove with Details** (pick collection, tags, note), **Trove Quick Save** (clipboard; for the Action Button, Back Tap, Control Center, Siri and a Mac hotkey) and **Trove Note** (dictate a thought). Each asks for your API key once. |
 | **Email** | Send or forward to your Trove address: links become links, newsletters become articles, attachments become files; `#tags @Collection` in the subject. Cloudflare Email Routing → `workers/email` → `/api/inbound/email`. |
 | **Raycast** (Mac) | `raycast/`: save the front tab or clipboard, search by meaning with previews, ask your library. |
 | **Feeds** | RSS, Atom, Substack, YouTube channels, OPML. |
 | **GitHub stars** | Every repo you star is saved to the **GitHub stars** collection with its README, twice a day (`GITHUB_STARS_USER`, optional `GITHUB_TOKEN`). |
 | **Android, Windows, ChromeOS** | Install the app (PWA) → it appears in the system share sheet. |
-| **Any browser** | Bookmarklet (Settings → drag “＋ Save to Trove”); selected text becomes a highlight. |
+| **Any browser** | Bookmarklet (Settings → Ways to save → drag “Save to Trove”); selected text becomes a highlight. |
 | **Terminal, scripts & AI agents** | `trove` CLI, REST API, MCP: see below. Agents can also upload images, videos, audio and documents. |
 
 ## AI agents
@@ -69,7 +69,7 @@ Trove is built to be driven by agents: anything that can run a command or make a
 ### Telegram bot setup
 
 1. Create a bot with @BotFather, then set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET` (random) and `TELEGRAM_ALLOWED_USERS` (your numeric Telegram id) on Vercel.
-2. Settings → Telegram → Reconnect (or `POST /api/telegram/setup`) sets the webhook, commands and descriptions.
+2. Settings → Ways to save → Telegram → Reconnect (or `POST /api/telegram/setup`) sets the webhook, commands and descriptions.
 3. Optional, in @BotFather: `/setinline` for `@bot query` search in any chat, and Bot Settings → Guest Chat Mode so mentioning the bot in any chat saves the message.
 
 ### Email setup
@@ -129,7 +129,7 @@ X's web API rotates query ids, feature flags and an `x-client-transaction-id`. T
 3. **Extension:** load `extension/` unpacked (or the release zip), then set the app URL + API key in its settings.
 4. **Shortcuts:** `python3 scripts/make-shortcut.py https://your-app` builds and signs all four.
 5. **AI (optional, free):** deploy `workers/ai` with `wrangler deploy` and `wrangler secret put TROVE_AI_SECRET`, then set `AI_BASE_URL` (the worker URL + `/v1`), `AI_API_KEY` (the secret), `AI_MODEL=@cf/qwen/qwen3-30b-a3b-fp8`, `AI_VISION_MODEL=@cf/meta/llama-4-scout-17b-16e-instruct` and `AI_EMBED_MODEL=@cf/baai/bge-m3`. Optionally `wrangler secret put TROVE_ENRICH_KEY` with a Trove API key: the worker then asks Trove every hour to process items still waiting for AI (imports, syncs, saves made while AI was paused). On the Workers Free plan it stops at 10,000 neurons a day (about 500 items when most need OCR, many more when they don't) and resumes at 00:00 UTC; it can't bill. Without `AI_BASE_URL`, Trove uses Vercel AI Gateway (needs a card). `TROVE_AI=off` turns AI off.
-6. **Shows (optional):** connect your Spotify and YouTube sign-ins (extension settings → YouTube & Spotify progress, or Trove → Settings → Shows) and redeploy `workers/ai` so its hourly cron also syncs them. Details in [docs/shows.md](docs/shows.md).
+6. **Shows (optional):** connect your Spotify and YouTube sign-ins (extension settings → YouTube & Spotify, or Trove → Settings → Shows) and redeploy `workers/ai` so its hourly cron also syncs them. Details in [docs/shows.md](docs/shows.md).
 7. **Backup (optional):** a private repo with `.github/workflows/backup.yml` running `trove backup library` nightly, a `TROVE_API_KEY` secret, and `TROVE_BACKUP_REPO` on Vercel to link it from Settings.
 
 ## Development

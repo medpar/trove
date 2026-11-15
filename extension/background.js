@@ -505,6 +505,8 @@ async function handle(msg) {
       return Watch.serverStatus();
     case 'shareSignIns':
       return { result: await Watch.shareSignIns({ storeId: msg.storeId, youtube: msg.youtube !== false, spotify: msg.spotify !== false }) };
+    case 'troveHealth':
+      return Trove.health();
     case 'setTrove': {
       await S.setSettings({ troveUrl: msg.url.replace(/\/$/, ''), ...(msg.key ? { troveKey: msg.key } : {}) });
       const h = await Trove.health();

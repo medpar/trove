@@ -16,7 +16,28 @@
   --radius: 10px;
   --font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  --primary-hover: #2b2e33;
   color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141517;
+    --surface: #1b1c1f;
+    --surface-2: #26282c;
+    --border: #2f3135;
+    --text: #ececee;
+    --muted: #9b9ea5;
+    --accent: #ff6b2c;
+    --accent-soft: #2c1c13;
+    --primary: #ececee;
+    --primary-ink: #141517;
+    --primary-hover: #d6d7da;
+    --ok: #3ccf87;
+    --warn: #e5a23a;
+    --err: #ff6b6b;
+    --err-soft: #3a1c1c;
+    color-scheme: dark;
+  }
 }
 em, i { font-style: normal; }
 * { box-sizing: border-box; }
@@ -30,7 +51,7 @@ button {
 button:hover:not(:disabled) { background: var(--surface-2); }
 button:disabled { opacity: .45; cursor: default; }
 button.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
-button.primary:hover:not(:disabled) { background: #2b2e33; }
+button.primary:hover:not(:disabled) { background: var(--primary-hover); }
 button:active:not(:disabled) { scale: .96; }
 button.danger { color: var(--err); }
 a.btn { display: inline-flex; align-items: center; font-weight: 550; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 0 12px; text-decoration: none; }
