@@ -76,6 +76,12 @@ export async function getShow(id: string) {
 
 const slug = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'show';
 const cleanSeries = (t: string) => t.replace(/\s+(podcast|playlist)$/i, '').trim();
+/** A playlist's name as a series ("Lightcone Podcast" -> "Lightcone"), unless that leaves just the show's own name. */
+const seriesName = (title: string, show: Show) => {
+  const short = cleanSeries(title);
+  const own = [show.title, show.youtube?.title, show.spotify?.title].filter(Boolean).map((t) => t!.toLowerCase());
+  return own.some((t) => t === short.toLowerCase() || t.startsWith(`${short.toLowerCase()} `)) ? title.trim() : short;
+};
 
 // ---------- catalogs ----------
 
@@ -239,7 +245,7 @@ export async function setupShow(id: string, { spDc }: { spDc?: string | null } =
     const counts = new Map<string, number>();
     for (const v of c.yt) if (paired.has(v.id) || !show.spotify) for (const pl of v.playlists) counts.set(pl, (counts.get(pl) || 0) + 1);
     const keep = c.playlists.filter((p) => (counts.get(p.id) || 0) >= 2).sort((a, b) => (counts.get(b.id) || 0) - (counts.get(a.id) || 0));
-    show.youtube.playlists = keep.map((p) => ({ id: p.id, title: p.title, series: cleanSeries(p.title) }));
+    show.youtube.playlists = keep.map((p) => ({ id: p.id, title: p.title, series: seriesName(p.title, show) }));
     // Keep only the videos of the chosen playlists (and the uploads) from now on.
     const kept = new Set(keep.map((p) => p.id));
     c.yt = c.yt.map((v) => ({ ...v, playlists: v.playlists.filter((p) => kept.has(p)) }));
