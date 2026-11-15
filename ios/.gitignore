@@ -1,0 +1,4 @@
+build/
+*.ipa
+xcuserdata/
+*.xcuserstate
