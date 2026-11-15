@@ -56,5 +56,5 @@ export type Stats = {
 export type View = 'cards' | 'list' | 'headlines' | 'mood';
 export type Sort = 'newest' | 'oldest' | 'title' | 'title_desc' | 'site' | 'published';
 
-export type ScopeKind = 'all' | 'unsorted' | 'favorites' | 'unread' | 'highlights' | 'notes' | 'reminders' | 'broken' | 'notag' | 'collection' | 'tag' | 'type' | 'source' | 'feeds';
+export type ScopeKind = 'all' | 'unsorted' | 'favorites' | 'unread' | 'highlights' | 'notes' | 'reminders' | 'broken' | 'notag' | 'collection' | 'tag' | 'type' | 'source' | 'feeds' | 'shows';
 export type Scope = { kind: ScopeKind; value?: string };

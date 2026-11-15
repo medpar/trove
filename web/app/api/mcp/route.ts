@@ -10,6 +10,7 @@ import { addHighlight, getItem, invalidateStats, list, lookup, remove, renameFac
 import { toSaveInput } from '@/lib/input';
 import { createUpload, saveFile, type FileSource } from '@/lib/files';
 import { decodeBase64, dataUrlType } from '@/lib/media';
+import { listEpisodes, lookupRefs, refOf, type Card } from '@/lib/episodes';
 
 export const maxDuration = 300;
 
@@ -20,6 +21,7 @@ Use it whenever the user shares a link or content and wants it kept ("save this"
 - save_file: store an image, video, audio file or document (screenshots, generated images, recordings, PDFs). Pass base64 "data" (up to ~3 MB) or a public "file_url". For bigger files call create_upload, PUT the bytes to the returned URL (e.g. with curl), then call save_file with "upload". Saving the same file again merges instead of duplicating.
 - smart_search finds items by meaning (plain-language queries); ask_library answers a question from saved items with citations; related_items finds similar items.
 - get_item returns the archived full content (Markdown) for summarizing or answering questions.
+- episode_status says whether the user already watched/listened to a YouTube video or Spotify episode (on any platform or device) and where they stopped; episodes_in_progress lists what they're in the middle of.
 File everything you save without asking: call list_collections and list_tags once, then pass the best existing collection (nested with "/", create one only when nothing fits; never "Browser bookmarks", "X bookmarks", "Pinterest" or "GitHub stars", which Trove fills itself), 1-4 short lowercase tags and, when the user gave context, a one-line note. Write collection names, tags, notes and any title you set in English, even if the content or request is in another language. Trove detects the content type itself. Report only what tool results confirm.`;
 
 const brief = (i: Item) => ({
@@ -325,6 +327,49 @@ function build(who: Caller) {
           try {
             const r = await lookup(urls);
             return ok(Object.fromEntries(Object.entries(r).map(([u, it]) => [u, it ? brief(it) : null])));
+          } catch (e) {
+            return fail(e);
+          }
+        },
+      );
+
+      // Shows: what the user watched or listened to on YouTube and Spotify, on any device.
+      const episode = (c: Card) => ({
+        id: c.id,
+        title: c.title,
+        show: c.show,
+        series: c.series,
+        status: c.status,
+        heard: `${Math.round(c.pct * 100)}%`,
+        resume: c.resume ? { platform: c.resume.p === 'yt' ? 'YouTube' : 'Spotify', seconds: c.resume.pos } : null,
+        finished: c.finishedAt ? new Date(c.finishedAt).toISOString() : null,
+        youtube: c.yt ? `https://www.youtube.com/watch?v=${c.yt.id}` : null,
+        spotify: c.sp ? `https://open.spotify.com/episode/${c.sp.id}` : null,
+      });
+      server.registerTool(
+        'episode_status',
+        { title: 'Have I watched or listened to this?', description: 'For YouTube video or Spotify episode links: whether the user finished it, how much they heard and where they stopped, on whichever platform or device (the YouTube video and the Spotify episode of a show count as one). null = never played.', inputSchema: z.object({ urls: z.array(z.string()).min(1).max(20) }), annotations: { readOnlyHint: true } },
+        async ({ urls }) => {
+          try {
+            const refs = new Map(urls.map((u) => [u, refOf(u)]));
+            const found = await lookupRefs([...refs.values()].filter(Boolean).map((r) => `${r!.p}:${r!.id}`));
+            return ok(Object.fromEntries(urls.map((u) => {
+              const r = refs.get(u);
+              const c = r ? found[`${r.p}:${r.id}`] : null;
+              return [u, c ? episode(c) : null];
+            })));
+          } catch (e) {
+            return fail(e);
+          }
+        },
+      );
+
+      server.registerTool(
+        'episodes_in_progress',
+        { title: 'Episodes in progress or finished', description: 'What the user is in the middle of (latest first), or recently finished, across YouTube and Spotify.', inputSchema: z.object({ status: z.enum(['started', 'finished']).default('started'), limit: z.number().int().min(1).max(50).default(15) }), annotations: { readOnlyHint: true } },
+        async ({ status, limit }) => {
+          try {
+            return ok((await listEpisodes({ status, limit })).cards.map(episode));
           } catch (e) {
             return fail(e);
           }

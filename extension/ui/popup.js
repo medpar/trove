@@ -1,4 +1,5 @@
 import { $, ago, el, explain, fmt, send, until } from './common.js';
+import { mapPosition } from '../lib/progress.js';
 
 let activeTab = null;
 let saved = null;
@@ -154,10 +155,75 @@ $('openLog').onclick = (e) => {
   chrome.tabs.create({ url: chrome.runtime.getURL('ui/options.html#activity') });
 };
 
+const clock = (s) => {
+  s = Math.max(0, Math.floor(s || 0));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${String(m).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`;
+};
+const NAME = { yt: 'YouTube', sp: 'Spotify' };
+const linkTo = (p, id, pos) => (p === 'yt' ? `https://www.youtube.com/watch?v=${id}${pos > 5 ? `&t=${Math.floor(pos)}s` : ''}` : `https://open.spotify.com/episode/${id}${pos > 5 ? `?t=${Math.floor(pos)}` : ''}`);
+
+/** The video or episode in this tab: have I seen it, on which platform, where was I. */
+async function renderWatch() {
+  if (!activeTab?.url) return;
+  let r;
+  try {
+    r = await send('watchTab', { url: activeTab.url });
+  } catch {
+    return;
+  }
+  if (!r.ref) return;
+  const box = $('watchBox');
+  box.hidden = false;
+  const card = r.card;
+  const here = r.ref.p;
+  $('watchWhat').textContent = here === 'yt' ? 'YouTube video' : 'Spotify episode';
+  const st = $('watchState');
+  const meter = $('watchMeter');
+  const actions = $('watchActions');
+  actions.replaceChildren();
+  st.className = 'st';
+  meter.hidden = true;
+  if (!card || card.status === 'new') {
+    st.textContent = 'Not played yet, on YouTube or Spotify';
+    return;
+  }
+  if (card.status === 'finished') {
+    st.classList.add('done');
+    const on = card.doneOn && !['both', 'manual', here].includes(card.doneOn) ? ` on ${NAME[card.doneOn]}` : '';
+    st.textContent = `✓ Finished${on}${card.finishedAt ? ` · ${new Date(card.finishedAt).toLocaleDateString()}` : ''}`;
+  } else {
+    const res = card.resume;
+    st.textContent = `${Math.round((card.pct || 0) * 100)}% heard${res ? ` · last at ${clock(res.pos)} on ${NAME[res.p]}` : ''}`;
+    meter.hidden = false;
+    meter.firstElementChild.style.width = `${Math.round((card.pct || 0) * 100)}%`;
+  }
+  const other = here === 'yt' ? 'sp' : 'yt';
+  if (card[other]?.id) {
+    const res = card.status === 'started' ? card.resume : null;
+    // The other copy may be longer or shorter (intro, ads): map the time onto it.
+    const pos = !res ? 0 : res.p === other ? res.pos : mapPosition(res.pos, res.dur || card[res.p]?.dur, card[other].dur).pos;
+    actions.append(el('a', { class: 'btn', href: linkTo(other, card[other].id, pos), target: '_blank' }, `Open on ${NAME[other]}${pos > 5 ? ` at ${clock(pos)}` : ''}`));
+  }
+  const toggle = el('button', {}, card.status === 'finished' ? 'Not finished' : 'Mark finished');
+  toggle.onclick = async () => {
+    toggle.disabled = true;
+    try {
+      await send('watchMark', { id: card.id, patch: { status: card.status === 'finished' ? 'unfinished' : 'finished' } });
+      renderWatch();
+    } catch (e) {
+      toggle.textContent = e.message;
+    }
+  };
+  actions.append(toggle);
+}
+
 chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   activeTab = tab || null;
   renderSave();
   render();
+  renderWatch();
   if (activeTab && /^https?:/.test(activeTab.url || '')) {
     send('lookup', { url: activeTab.url })
       .then((r) => {

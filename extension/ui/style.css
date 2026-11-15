@@ -33,6 +33,8 @@ button.primary { background: var(--primary); border-color: var(--primary); color
 button.primary:hover:not(:disabled) { background: #2b2e33; }
 button:active:not(:disabled) { scale: .96; }
 button.danger { color: var(--err); }
+a.btn { display: inline-flex; align-items: center; font-weight: 550; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 8px; padding: 0 12px; text-decoration: none; }
+a.btn:hover { background: var(--surface-2); }
 button.link { border: 0; background: none; padding: 0; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
 input[type=text], input[type=password], input[type=number], select, textarea {
   font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; width: 100%;

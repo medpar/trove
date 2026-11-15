@@ -79,6 +79,37 @@
     <div class="actions"><button id="syncPinterestNow">Import all pins</button><span id="pinMsg" class="msg muted"></span></div>
   </section>
 
+  <section class="card" id="watch">
+    <h2>YouTube &amp; Spotify progress</h2>
+    <p class="muted" style="margin: -4px 0 0">Trove tracks what you actually play on youtube.com and open.spotify.com (skips and ads don't count, closing the tab loses nothing), pairs the YouTube video and the Spotify episode of the same show, and marks what you've started or finished on both sites. Your episodes are in Trove → Shows and in the Episodes database in Notion.</p>
+    <div class="grid2">
+      <label class="switch"><input type="checkbox" id="watchYouTube" /><span><b>Track YouTube</b><span class="muted">Every video you play on youtube.com (not Shorts).</span></span></label>
+      <label class="switch"><input type="checkbox" id="watchSpotify" /><span><b>Track the Spotify web player</b><span class="muted">Podcast episodes you play on open.spotify.com (music is ignored).</span></span></label>
+      <label class="switch"><input type="checkbox" id="watchBadges" /><span><b>Mark videos and episodes</b><span class="muted">“✓ Watched on Spotify”, “◐ 34% · 23:14” on thumbnails and episode lists, with a Resume button on the video or episode page.</span></span></label>
+      <label class="switch"><input type="checkbox" id="watchDim" /><span><b>Dim what you've finished</b><span class="muted">Finished thumbnails fade so new ones stand out.</span></span></label>
+    </div>
+    <div class="field">
+      <label>In this browser</label>
+      <div>
+        <div id="watchInfo" class="muted">…</div>
+        <div class="actions" style="margin-top: 8px"><button id="watchRefresh">Refresh now</button></div>
+      </div>
+    </div>
+    <div class="field">
+      <label>Phone &amp; tablet</label>
+      <div>
+        <dl class="kv" id="serverInfo"><dt>Server sync</dt><dd class="muted">…</dd></dl>
+        <div class="actions" style="margin-top: 8px">
+          <button id="sendSpotify">Connect Spotify</button>
+          <button id="sendYouTube">Connect YouTube</button>
+          <button id="sendPrivate" hidden>Connect from private window</button>
+        </div>
+        <div id="sendMsg" class="msg"></div>
+      </div>
+      <div class="help">So Trove's server can read what you play on your iPhone and iPad (Spotify's played state and your YouTube watch history) with this browser closed, it needs your Spotify and YouTube sign-ins; they are sent to your Trove app only and kept encrypted. For YouTube, sign in in a private window (allow Trove in private windows on the extensions page), click <b>Connect from private window</b>, then close that window: a session no browser uses lasts much longer.</div>
+    </div>
+  </section>
+
   <section class="card" id="notion">
     <h2>Notion database</h2>
     <p class="muted" style="margin: -4px 0 12px">Your X bookmarks are archived in your Trove database as the “X bookmark” type, next to everything else you save.</p>

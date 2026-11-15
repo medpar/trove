@@ -23,6 +23,7 @@ async function load() {
   if (document.activeElement !== $('troveUrl')) $('troveUrl').value = s.troveUrl || '';
   $('troveKey').placeholder = s.troveKey ? 'Connected — paste to replace' : 'trv_… (Trove → Settings → API keys)';
   $('syncBrowserBookmarks').checked = !!s.syncBrowserBookmarks;
+  for (const k of ['watchYouTube', 'watchSpotify', 'watchBadges', 'watchDim']) $(k).checked = s[k] !== false;
   $('syncPinterest').checked = !!s.syncPinterest;
   const pin = state.pinterest;
   if (pin) {
@@ -165,6 +166,72 @@ $('syncPinterestNow').onclick = async () => {
   $('pinMsg').textContent = 'Reading your boards…';
   setTimeout(() => ($('syncPinterestNow').disabled = false), 5000);
 };
+// ---- YouTube & Spotify progress ----
+
+for (const k of ['watchYouTube', 'watchSpotify', 'watchBadges', 'watchDim']) $(k).onchange = () => saveSettings({ [k]: $(k).checked });
+
+async function loadWatch() {
+  try {
+    const { watch: w } = await send('watchStatus');
+    $('watchInfo').textContent = `${fmt(w.episodes)} episodes known · ${fmt(w.finished)} finished · ${fmt(w.started)} in progress · updated ${ago(w.syncedAt)}${w.pending ? ` · ${w.pending} waiting to upload` : ''}`;
+  } catch (e) {
+    $('watchInfo').textContent = e.message;
+  }
+  try {
+    const s = await send('serverSync');
+    const side = (x, label) => [
+      el('dt', {}, label),
+      el('dd', {}, !x.connected ? el('span', { class: 'muted' }, 'Not connected') : x.needsSignIn ? el('span', { class: 'msg err' }, 'Sign-in expired — connect again') : x.error ? el('span', { class: 'msg err' }, x.error) : `Connected${x.user ? ` as ${x.user}` : ''} ✓${x.at ? ` · synced ${ago(x.at)}` : ''}`),
+    ];
+    $('serverInfo').replaceChildren(...side(s.spotify, 'Spotify'), ...side(s.youtube, 'YouTube'));
+  } catch (e) {
+    $('serverInfo').replaceChildren(el('dt', {}, 'Server sync'), el('dd', { class: 'msg err' }, e.message));
+  }
+  // A private window with Trove allowed in it: offer its sign-ins.
+  const stores = await chrome.cookies.getAllCookieStores().catch(() => []);
+  const incognito = stores.find((st) => st.id !== '0' && st.tabIds?.length);
+  $('sendPrivate').hidden = !incognito;
+  $('sendPrivate').dataset.store = incognito?.id || '';
+}
+
+$('watchRefresh').onclick = async () => {
+  $('watchRefresh').disabled = true;
+  try {
+    await send('watchSync');
+  } catch (e) {
+    $('watchInfo').textContent = e.message;
+  }
+  $('watchRefresh').disabled = false;
+  loadWatch();
+};
+
+async function shareSignIns(opts, button) {
+  const label = button.textContent;
+  button.disabled = true;
+  button.textContent = 'Checking…';
+  setMsg('sendMsg', '');
+  try {
+    const { result } = await send('shareSignIns', opts);
+    const parts = [];
+    if (result.spotify) parts.push(result.spotify.error ? `Spotify: ${result.spotify.error}` : `Spotify connected as ${result.spotify.name || result.spotify.username} ✓`);
+    if (result.youtube) parts.push(result.youtube.error ? `YouTube: ${result.youtube.error}` : `YouTube connected ✓ (${result.youtube.videos} videos in your history)`);
+    const bad = Object.values(result).some((r) => r?.error);
+    setMsg('sendMsg', parts.join(' · ') + (!bad && opts.storeId ? ' — you can close the private window now.' : ''), bad ? 'err' : 'ok');
+  } catch (e) {
+    setMsg('sendMsg', e.message, 'err');
+  }
+  button.textContent = label;
+  button.disabled = false;
+  loadWatch();
+}
+
+$('sendSpotify').onclick = () => shareSignIns({ spotify: true, youtube: false }, $('sendSpotify'));
+$('sendYouTube').onclick = () => {
+  if (!confirm('Send this browser\'s YouTube sign-in to your Trove server?\n\nIt works, but YouTube may end a session used from two places. A private-window sign-in lasts longer: see the note below.')) return;
+  shareSignIns({ spotify: false, youtube: true }, $('sendYouTube'));
+};
+$('sendPrivate').onclick = () => shareSignIns({ storeId: $('sendPrivate').dataset.store, spotify: true, youtube: true }, $('sendPrivate'));
+
 $('importBookmarks').onclick = async () => {
   $('importBookmarks').disabled = true;
   await send('importBookmarks');
@@ -248,4 +315,6 @@ chrome.storage.onChanged.addListener((ch) => {
 
 load().then(() => {
   if (location.hash === '#activity') $('activity').scrollIntoView();
+  if (location.hash === '#watch') $('watch').scrollIntoView();
 });
+loadWatch();

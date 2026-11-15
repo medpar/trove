@@ -5,6 +5,7 @@ import { AddDialog } from './add';
 import { AgentPanel } from './agent';
 import { AskPanel } from './ask';
 import { FeedsView } from './feeds';
+import { ShowsView } from './shows';
 import { api, isSmartQuery, patchItem, refreshAll, removeLocal, useItems, useSmartSearch, useStats } from './api';
 import { Detail } from './detail';
 import { Items, Skeletons } from './items';
@@ -63,6 +64,8 @@ function titleFor(s: Scope): { title: string; plain: string } {
       return s.value === 'x' ? t('X bookmarks') : t('Library');
     case 'feeds':
       return t('Feeds');
+    case 'shows':
+      return t('Shows');
   }
 }
 
@@ -138,7 +141,8 @@ export default function TroveApp() {
 
   // ---- data ----
   const { data: stats } = useStats();
-  const feedsView = scope.kind === 'feeds';
+  // Feeds and Shows are their own views (no item list, search goes to the library).
+  const feedsView = scope.kind === 'feeds' || scope.kind === 'shows';
   const smartOn = smart && scope.kind === 'all' && isSmartQuery(q);
   const smartRes = useSmartSearch(q, smartOn);
   const list = useItems(scope, q, sort, !smartOn && !feedsView);
@@ -525,7 +529,9 @@ export default function TroveApp() {
           )}
 
           <section className="items" aria-busy={loading} aria-label="Items">
-            {feedsView ? (
+            {scope.kind === 'shows' ? (
+              <ShowsView />
+            ) : feedsView ? (
               <FeedsView stats={stats} onOpen={(id) => setSelected(id)} />
             ) : loading ? (
               <Skeletons view={view} />

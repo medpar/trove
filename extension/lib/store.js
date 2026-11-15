@@ -20,6 +20,11 @@ export const DEFAULTS = {
   troveKey: '',
   syncBrowserBookmarks: false,
   syncPinterest: false,
+  // Watch progress on youtube.com and open.spotify.com
+  watchYouTube: true,
+  watchSpotify: true,
+  watchBadges: true,
+  watchDim: true,
 };
 
 const local = () => chrome.storage.local;

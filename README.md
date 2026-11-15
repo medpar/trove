@@ -26,6 +26,7 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 - **Web archive.** Every page gets a self-contained snapshot (HTML with styles and images) stored in your Notion, plus a Wayback Machine capture. When a link dies, the archived page is one click away.
 - **Reader.** Reading progress that syncs across devices, listen (text-to-speech), adjustable text size, highlights with notes.
 - **Feeds.** Follow blogs, Substacks, YouTube channels and any RSS/Atom feed (OPML import). Posts wait in Feeds until you save them, or auto-save into a collection.
+- **Shows: never lose your place in a podcast.** What you watch on YouTube and listen to on Spotify, on any device, in one record per episode: what you actually played (seeks and ads don't count), where you stopped, and whether you finished, whichever platform it was. The video and the episode of the same show are paired, shows are split into series (from the channel's YouTube playlists, even when Spotify has none), and youtube.com and open.spotify.com mark what you've seen. Phone and tablet listening comes in through your own Spotify and YouTube sign-ins (no Premium, no API keys). See [docs/shows.md](docs/shows.md).
 - **Backups.** A nightly GitHub Action mirrors the library to Markdown + JSON in a private repo (`trove backup`).
 - **Free.** Vercel Hobby + your Notion workspace + Cloudflare (DNS, email routing, Workers AI free tier).
 
@@ -36,7 +37,7 @@ A personal, Raindrop-style library that archives what you save (articles, videos
 | **Web app** (any OS) | Paste a link anywhere (⌘V), drop it on the window, or press <kbd>N</kbd>. Add many links at once, or a plain note. |
 | **Brave / Chrome / Edge / Arc** (macOS, Windows, Linux) | The extension: toolbar button, <kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>, right-click page / link / image / **selection → highlight**. It reads the page you're on, so logged-in and paywalled pages are archived too. Imports all browser bookmarks (folders → collections) and can auto-save new ones. Keeps syncing your **X bookmarks** with threads and media. |
 | **Pinterest** | The extension imports every pin on your boards (secret ones and quick saves too) with its image archived, one sub-collection per board, and keeps them in sync every few hours. Uses your Pinterest login in the browser; no API keys. |
-| **Telegram** (every device) | Send or forward anything to your bot: links, text, photos, videos, voice notes, files. `#tags`, `@Collection`, `!fav` in the message; buttons to move, tag, favorite or delete; reply to a card to edit it. `? query` searches, `?? question` asks, `@yourbot query` shares a saved link in any chat, and mentioning the bot in a reply in any chat saves that message. On iPhone, iPad and Mac, Share → Telegram → your bot works from every app. |
+| **Telegram** (every device) | Send or forward anything to your bot: links, text, photos, videos, voice notes, files. For a YouTube video or Spotify episode it also tells you whether you already watched or heard it, on either platform. `#tags`, `@Collection`, `!fav` in the message; buttons to move, tag, favorite or delete; reply to a card to edit it. `? query` searches, `?? question` asks, `@yourbot query` shares a saved link in any chat, and mentioning the bot in a reply in any chat saves that message. On iPhone, iPad and Mac, Share → Telegram → your bot works from every app. |
 | **iPhone, iPad, Mac** | Four signed Shortcuts (Settings → Save from anywhere): **Save to Trove** (Share sheet: links, pages, text, photos, PDFs, files), **Save to Trove with Details** (pick collection, tags, note), **Trove Quick Save** (clipboard; for the Action Button, Back Tap, Control Center, Siri and a Mac hotkey) and **Trove Note** (dictate a thought). Each asks for your API key once. |
 | **Email** | Send or forward to your Trove address: links become links, newsletters become articles, attachments become files; `#tags @Collection` in the subject. Cloudflare Email Routing → `workers/email` → `/api/inbound/email`. |
 | **Raycast** (Mac) | `raycast/`: save the front tab or clipboard, search by meaning with previews, ask your library. |
@@ -100,10 +101,14 @@ web/          Next.js 16 app on Vercel: UI, REST API, MCP server, cron (daily br
   lib/bot.ts       Telegram bot (webhook at /api/telegram)
   lib/email.ts     Email to Trove (/api/inbound/email)
   lib/feeds.ts     RSS/Atom subscriptions
+  lib/episodes.ts  Shows: one Notion page per episode (YouTube + Spotify), progress merged across platforms
+  lib/shows.ts     Followed shows: both catalogs paired, series from YouTube playlists and title rules
+  lib/media-sync.ts  Hourly server sync of Spotify (web player API) and YouTube (watch history) progress
 workers/email/  Cloudflare Email Routing worker that relays mail to Trove
 workers/ai/     Free OpenAI-compatible relay to Cloudflare Workers AI (filing, OCR, embeddings)
 raycast/        Raycast extension
-extension/    Brave/Chrome MV3 extension: save pages/links/images/highlights, browser bookmarks, X bookmarks sync (local, uses your x.com session)
+extension/    Brave/Chrome MV3 extension: save pages/links/images/highlights, browser bookmarks, X bookmarks sync (local, uses your x.com session),
+              progress tracking and marks on youtube.com and open.spotify.com
 cli/          `trove` CLI and the local agent (Claude Code / Codex engines, bridge for the web app)
 skills/trove/ Agent skill
 scripts/      Notion setup, Apple Shortcut builder, icons, live checks
@@ -124,7 +129,8 @@ X's web API rotates query ids, feature flags and an `x-client-transaction-id`. T
 3. **Extension:** load `extension/` unpacked (or the release zip), then set the app URL + API key in its settings.
 4. **Shortcuts:** `python3 scripts/make-shortcut.py https://your-app` builds and signs all four.
 5. **AI (optional, free):** deploy `workers/ai` with `wrangler deploy` and `wrangler secret put TROVE_AI_SECRET`, then set `AI_BASE_URL` (the worker URL + `/v1`), `AI_API_KEY` (the secret), `AI_MODEL=@cf/qwen/qwen3-30b-a3b-fp8`, `AI_VISION_MODEL=@cf/meta/llama-4-scout-17b-16e-instruct` and `AI_EMBED_MODEL=@cf/baai/bge-m3`. Optionally `wrangler secret put TROVE_ENRICH_KEY` with a Trove API key: the worker then asks Trove every hour to process items still waiting for AI (imports, syncs, saves made while AI was paused). On the Workers Free plan it stops at 10,000 neurons a day (about 500 items when most need OCR, many more when they don't) and resumes at 00:00 UTC; it can't bill. Without `AI_BASE_URL`, Trove uses Vercel AI Gateway (needs a card). `TROVE_AI=off` turns AI off.
-6. **Backup (optional):** a private repo with `.github/workflows/backup.yml` running `trove backup library` nightly, a `TROVE_API_KEY` secret, and `TROVE_BACKUP_REPO` on Vercel to link it from Settings.
+6. **Shows (optional):** connect your Spotify and YouTube sign-ins (extension settings → YouTube & Spotify progress, or Trove → Settings → Shows) and redeploy `workers/ai` so its hourly cron also syncs them. Details in [docs/shows.md](docs/shows.md).
+7. **Backup (optional):** a private repo with `.github/workflows/backup.yml` running `trove backup library` nightly, a `TROVE_API_KEY` secret, and `TROVE_BACKUP_REPO` on Vercel to link it from Settings.
 
 ## Development
 

@@ -3,6 +3,7 @@ import { ArrowLeft, Command, Copy, RefreshCw, Star, Download, ExternalLink, Eye,
 import { useEffect, useRef, useState } from 'react';
 import useSWR from 'swr';
 import { api, refreshAll } from '@/components/api';
+import { MediaSettings } from '@/components/media-settings';
 import { CodeBox as Code, useToast } from '@/components/ui';
 
 type Me = {
@@ -315,6 +316,8 @@ export default function SettingsView() {
           </div>
         </div>
       </section>
+
+      <MediaSettings base={base} />
 
       <section>
         <h2>AI and web archive</h2>

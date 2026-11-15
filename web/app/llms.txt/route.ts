@@ -43,9 +43,18 @@ File it without asking: list existing collections and tags first (trove collecti
 - GET  ${base}/api/stats  -> collections, tags and counts
 - OpenAPI: ${base}/openapi.json
 
+## Watched / listened (YouTube and Spotify, any device)
+Each episode is one record with both platforms: status new|started|finished, pct (0..1 heard across platforms), resume {p: "yt"|"sp", pos (seconds), dur}, finishedAt, doneOn.
+- GET  ${base}/api/media/lookup?url=<YouTube or Spotify link>  -> {results: {<url>: card|null}}  ("have I seen this, and where was I?")
+- GET  ${base}/api/media/episodes?status=started|finished&show=&limit=  -> {cards} (latest played first)
+- PATCH ${base}/api/media/episodes/{id}  {status: "finished"|"unfinished", series, link: "<link of the same episode on the other platform>", unlink: "yt"|"sp", position: {p, pos}}
+- POST ${base}/api/media/events  {events: [{p: "yt"|"sp", id, at, dur, ranges: [[start, end]], pos, ext: {pos, done}}]}  -> report progress
+- GET  ${base}/api/media/shows , GET ${base}/api/media/shows/{id}  -> followed shows, each episode with its series and progress
+- POST ${base}/api/media/sync  -> read what was played on Spotify and YouTube (phone included) now
+
 ## MCP (optional)
 - Streamable HTTP server: ${base}/api/mcp with the same bearer key
-- Tools: save, save_many, save_file, create_upload, search, smart_search, ask_library, related_items, get_item, update_item, add_highlight, delete_item, check_saved, list_collections, list_tags, rename
+- Tools: save, save_many, save_file, create_upload, search, smart_search, ask_library, related_items, get_item, update_item, add_highlight, delete_item, check_saved, episode_status, episodes_in_progress, list_collections, list_tags, rename
 
 ## What Trove does after a save
 New items without a collection are filed by AI into existing collections and tags (pass autofile: false to prevent it), get a one-line summary, are indexed for search by meaning, images and PDFs are read with OCR, and web pages get a full snapshot plus a Wayback Machine capture.

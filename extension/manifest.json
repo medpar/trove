@@ -2,13 +2,19 @@
   "manifest_version": 3,
   "name": "Trove — save anything",
   "short_name": "Trove",
-  "version": "2.3.0",
-  "description": "Save pages, links, images, highlights, browser bookmarks, your X bookmarks (with threads and media) and your Pinterest saves to your Trove library in Notion.",
+  "version": "2.4.0",
+  "description": "Save pages, links, images, highlights, browser bookmarks, your X bookmarks and Pinterest saves to Trove, and track what you watch and listen to on YouTube and Spotify.",
   "minimum_chrome_version": "120",
   "icons": { "16": "icons/icon16.png", "32": "icons/icon32.png", "48": "icons/icon48.png", "128": "icons/icon128.png" },
   "permissions": ["storage", "alarms", "cookies", "webRequest", "declarativeNetRequestWithHostAccess", "contextMenus", "notifications", "bookmarks", "scripting", "activeTab"],
-  "host_permissions": ["https://x.com/*", "https://api.notion.com/*", "https://trove.mariomedpar.com/*", "https://www.youtube.com/*", "https://*.pinterest.com/*", "https://i.pinimg.com/*"],
+  "host_permissions": ["https://x.com/*", "https://api.notion.com/*", "https://trove.mariomedpar.com/*", "https://www.youtube.com/*", "https://*.pinterest.com/*", "https://i.pinimg.com/*", "https://open.spotify.com/*", "https://*.spotify.com/*"],
   "background": { "service_worker": "background.js", "type": "module" },
+  "content_scripts": [
+    { "matches": ["https://www.youtube.com/*"], "js": ["content/media.js", "content/youtube.js"], "run_at": "document_idle" },
+    { "matches": ["https://open.spotify.com/*"], "js": ["content/spotify-main.js"], "run_at": "document_start", "world": "MAIN" },
+    { "matches": ["https://open.spotify.com/*"], "js": ["content/media.js", "content/spotify.js"], "run_at": "document_idle" }
+  ],
+  "web_accessible_resources": [{ "resources": ["lib/progress.js"], "matches": ["https://www.youtube.com/*", "https://open.spotify.com/*"] }],
   "action": {
     "default_title": "Save to Trove",
     "default_popup": "ui/popup.html",

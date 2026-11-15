@@ -1,6 +1,6 @@
 'use client';
 import {
-  AlarmClock, Bot, BookmarkCheck, ChevronRight, Folder, FolderOpen, Hash, Heart, Highlighter, Inbox, Layers, Link2Off, Moon, NotebookPen, Rss, Search, Settings, Sun, Tags, X,
+  AlarmClock, Bot, BookmarkCheck, ChevronRight, Folder, FolderOpen, Hash, Headphones, Heart, Highlighter, Inbox, Layers, Link2Off, Moon, NotebookPen, Rss, Search, Settings, Sun, Tags, X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { Scope, Stats } from './types';
@@ -149,6 +149,7 @@ export function Sidebar({ stats, scope, onScope, onSearch, onAgent, theme, onThe
           {!!stats?.notes && <Item s={{ kind: 'notes' }} icon={<NotebookPen size={16} />} label="With notes" count={stats.notes} />}
           {!!stats?.reminders && <Item s={{ kind: 'reminders' }} icon={<AlarmClock size={16} />} label="Reminders" count={stats.reminders} />}
           <Item s={{ kind: 'feeds' }} icon={<Rss size={16} />} label="Feeds" />
+          <Item s={{ kind: 'shows' }} icon={<Headphones size={16} />} label="Shows" />
 
           <div className="side-section">
             <div className="side-title">Collections</div>

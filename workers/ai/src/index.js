@@ -83,9 +83,17 @@ async function drain(env) {
   console.log(JSON.stringify({ status: res.status, done: r.done, remaining: r.remaining, paused: r.paused || null, error: r.error || r.errors?.[0] || null }));
 }
 
+// Also hourly: ask Trove to read what you played on Spotify and YouTube on any device (phone, iPad,
+// apps) with the sign-ins saved in its Settings → Shows. Trove answers right away and syncs after.
+async function syncMedia(env) {
+  if (!env.TROVE_URL || !env.TROVE_ENRICH_KEY) return;
+  const res = await fetch(`${env.TROVE_URL.replace(/\/$/, '')}/api/media/sync`, { method: 'POST', headers: { authorization: `Bearer ${env.TROVE_ENRICH_KEY}` } });
+  console.log(JSON.stringify({ media: res.status }));
+}
+
 export default {
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(drain(env));
+    ctx.waitUntil(Promise.allSettled([drain(env), syncMedia(env)]));
   },
 
   async fetch(req, env) {

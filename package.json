@@ -1,6 +1,6 @@
 {
   "name": "trove",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": true,
   "description": "Trove: save anything into a Notion-backed library — web app, browser extension, Apple Shortcut, CLI and API for AI agents.",
   "type": "module",
@@ -11,7 +11,7 @@
     "cli/"
   ],
   "scripts": {
-    "test": "node --experimental-strip-types --no-warnings --test test/*.test.mjs",
+    "test": "node --experimental-transform-types --no-warnings --test test/*.test.mjs",
     "icons": "node scripts/make-icons.mjs",
     "setup": "node scripts/setup-notion.mjs",
     "package": "node scripts/package.mjs"

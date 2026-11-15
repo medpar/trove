@@ -12,8 +12,12 @@ import { tweetIdFromUrl } from './lib/util.js';
 import * as Trove from './lib/trove.js';
 import * as Pinterest from './lib/pinterest.js';
 import { videoIdOf, youtubeData } from './lib/youtube.js';
+import * as Watch from './lib/watch.js';
 
 // ---------- listeners (registered synchronously at startup) ----------
+
+// What you play on youtube.com and open.spotify.com: outbox, uploads and the page marks.
+Watch.install();
 
 let quickTimer = null;
 X.installCapture({
@@ -487,6 +491,20 @@ async function handle(msg) {
     case 'syncPinterest':
       syncPinterest({ manual: true }).catch(() => {});
       return {};
+    case 'watchStatus':
+      return { watch: await Watch.status() };
+    case 'watchSync':
+      await Watch.flush().catch(() => {});
+      await Watch.syncIndex({ force: true });
+      return { watch: await Watch.status() };
+    case 'watchTab':
+      return Watch.forUrl(msg.url);
+    case 'watchMark':
+      return { card: await Watch.mark(msg.id, msg.patch) };
+    case 'serverSync':
+      return Watch.serverStatus();
+    case 'shareSignIns':
+      return { result: await Watch.shareSignIns({ storeId: msg.storeId, youtube: msg.youtube !== false, spotify: msg.spotify !== false }) };
     case 'setTrove': {
       await S.setSettings({ troveUrl: msg.url.replace(/\/$/, ''), ...(msg.key ? { troveKey: msg.key } : {}) });
       const h = await Trove.health();

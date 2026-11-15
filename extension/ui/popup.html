@@ -28,6 +28,14 @@
     footer { display: flex; gap: 14px; font-size: 12px; border-top: 1px solid var(--border); padding-top: 10px; }
     footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--text); }
+    .watch { display: grid; gap: 8px; padding: 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+    .watch .what { font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .watch .st { font-weight: 600; }
+    .watch .st.done { color: var(--ok); }
+    .watch .meter { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+    .watch .meter i { display: block; height: 100%; background: var(--accent); }
+    .watch .row { flex-wrap: wrap; gap: 6px; }
+    .watch .row button, .watch .row a.btn { height: 30px; font-size: 12.5px; }
     [hidden] { display: none !important; }
   </style>
 </head>
@@ -45,6 +53,13 @@
     <div class="page"><img id="pageIcon" alt="" /><span id="pageTitle"></span></div>
     <button class="primary" id="saveBtn">Save to Trove</button>
     <div class="state muted" id="saveState">Selected text is saved as a highlight · <span class="kbd">Alt⇧S</span></div>
+  </section>
+
+  <section class="watch" id="watchBox" hidden>
+    <div class="what" id="watchWhat">Trove progress</div>
+    <div class="st" id="watchState"></div>
+    <div class="meter" id="watchMeter" hidden><i></i></div>
+    <div class="row" id="watchActions"></div>
   </section>
 
   <section class="stats">
