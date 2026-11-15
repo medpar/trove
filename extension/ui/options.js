@@ -208,14 +208,21 @@ $('watchRefresh').onclick = async () => {
 async function shareSignIns(opts, button) {
   const label = button.textContent;
   button.disabled = true;
-  button.textContent = 'Checking…';
+  button.textContent = 'Connecting…';
   setMsg('sendMsg', '');
   try {
     const { result } = await send('shareSignIns', opts);
     const parts = [];
-    if (result.spotify) parts.push(result.spotify.error ? `Spotify: ${result.spotify.error}` : `Spotify connected as ${result.spotify.name || result.spotify.username} ✓`);
-    if (result.youtube) parts.push(result.youtube.error ? `YouTube: ${result.youtube.error}` : `YouTube connected ✓ (${result.youtube.videos} videos in your history)`);
-    const bad = Object.values(result).some((r) => r?.error);
+    const name = { spotify: 'Spotify', youtube: 'YouTube' };
+    for (const k of ['spotify', 'youtube']) {
+      const r = result[k];
+      if (!r) continue;
+      if (r.error) parts.push(`${name[k]}: ${r.error}`);
+      else if (r.missing) {
+        if (!opts.storeId || k === 'youtube') parts.push(`${name[k]}: not signed in ${opts.storeId ? 'in the private window' : 'in this browser'}`);
+      } else parts.push(k === 'spotify' ? `Spotify connected as ${r.name || r.username} ✓` : `YouTube connected ✓ (${r.videos} videos in your history)`);
+    }
+    const bad = Object.values(result).some((r) => r?.error) || (opts.storeId && result.youtube?.missing);
     setMsg('sendMsg', parts.join(' · ') + (!bad && opts.storeId ? ' — you can close the private window now.' : ''), bad ? 'err' : 'ok');
   } catch (e) {
     setMsg('sendMsg', e.message, 'err');

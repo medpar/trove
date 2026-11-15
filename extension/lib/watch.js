@@ -334,21 +334,30 @@ export async function mark(id, patch) {
   return r.card;
 }
 
+/** The YouTube and Spotify sign-ins found in a cookie store (this browser's, or a private window's). */
+export async function signInsIn(storeId) {
+  const opt = storeId ? { storeId } : {};
+  const sp = await chrome.cookies.get({ url: 'https://open.spotify.com', name: 'sp_dc', ...opt }).catch(() => null);
+  const yt = await chrome.cookies.getAll({ domain: 'youtube.com', ...opt }).catch(() => []);
+  return { spotify: !!sp?.value, youtube: yt.some((c) => c.name === 'SAPISID' || c.name === '__Secure-3PAPISID') };
+}
+
 /**
- * Send this browser's (or a private window's) YouTube and Spotify sign-ins to Trove, so the server
- * can read what you play on your phone without the browser open. `storeId` picks the cookie store.
+ * Send the YouTube and/or Spotify sign-in of a cookie store to Trove, so the server can read what
+ * you play on your phone without this browser open. Only what that window is signed in to is sent;
+ * the rest is reported as {missing: true}, not as an error.
  */
 export async function shareSignIns({ storeId, youtube = true, spotify = true } = {}) {
+  const opt = storeId ? { storeId } : {};
   const out = {};
   if (spotify) {
-    const c = await chrome.cookies.get({ url: 'https://open.spotify.com', name: 'sp_dc', ...(storeId ? { storeId } : {}) }).catch(() => null);
-    if (!c?.value) out.spotify = { error: 'Not signed in to open.spotify.com in this window' };
+    const c = await chrome.cookies.get({ url: 'https://open.spotify.com', name: 'sp_dc', ...opt }).catch(() => null);
+    if (!c?.value) out.spotify = { missing: true };
     else out.spotify = await api('/api/media/connect', { method: 'POST', body: { spotify: c.value } }).then((r) => r.spotify).catch((e) => ({ error: e.message }));
   }
   if (youtube) {
-    const all = await chrome.cookies.getAll({ domain: 'youtube.com', ...(storeId ? { storeId } : {}) }).catch(() => []);
-    const jar = Object.fromEntries(all.map((c) => [c.name, c.value]));
-    if (!jar.SAPISID && !jar['__Secure-3PAPISID']) out.youtube = { error: 'Not signed in to youtube.com in this window' };
+    const all = await chrome.cookies.getAll({ domain: 'youtube.com', ...opt }).catch(() => []);
+    if (!all.some((c) => c.name === 'SAPISID' || c.name === '__Secure-3PAPISID')) out.youtube = { missing: true };
     else out.youtube = await api('/api/media/connect', { method: 'POST', body: { youtube: JSON.stringify(all.map(({ name, value, domain }) => ({ name, value, domain }))) } }).then((r) => r.youtube).catch((e) => ({ error: e.message }));
   }
   return out;

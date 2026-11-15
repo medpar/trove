@@ -120,13 +120,14 @@ function spotifyChanges(st: NonNullable<SyncState['spotify']>, episodes: SpEpiso
 }
 
 /**
- * When an episode you had never been seen playing turns up already played (first import), the
- * best guess for when you heard it is a few days after it came out, not "now".
+ * When an episode turns up already played on the first import, we don't know when you heard it.
+ * Spotify's "last played" for its show is the best clue (for the one you're in the middle of);
+ * otherwise a few days after it came out, never "now".
  */
-const guessWhen = (e: SpEpisode, played: number) => {
+const guessWhen = (e: SpEpisode, played: number, known = false) => {
   if (!e.released) return played;
   const r = Date.parse(e.released) + 3 * 864e5;
-  return e.played?.done ? Math.min(played, r) : played;
+  return known && !e.played?.done ? played : Math.min(played, r);
 };
 
 async function syncSpotify(creds: SpotifyCreds, st: NonNullable<SyncState['spotify']>, { deep, deadline, pending }: { deep: boolean; deadline: number; pending: Pending }) {
@@ -153,7 +154,7 @@ async function syncSpotify(creds: SpotifyCreds, st: NonNullable<SyncState['spoti
       for (let i = 0; i < pages && Date.now() < deadline; i++) {
         const page = await sp.showEpisodes(id, i * 50, 50);
         if (i === 0) heard.set(id, { id, title: page.title });
-        events.push(...spotifyChanges(st, page.episodes, (e, first) => (first ? guessWhen(e, when(ctx.at)) : when(ctx.at)), pending));
+        events.push(...spotifyChanges(st, page.episodes, (e, first) => (first ? guessWhen(e, when(ctx.at), !!ctx.at) : when(ctx.at)), pending));
         if (page.episodes.length < 50) break;
       }
       scanned[id] = Date.now();
