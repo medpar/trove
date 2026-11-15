@@ -38,7 +38,12 @@ struct MainView: View {
         }
         .environment(router)
         .overlay(alignment: .bottom) { ToastOverlay() }
-        .sheet(item: $router.sheet) { sheet in
+        .sheet(item: Binding(get: { router.sheet?.isFullScreen == false ? router.sheet : nil }, set: { router.sheet = $0 })) { sheet in
+            SheetHost(sheet: sheet)
+                .environment(router)
+                .environment(library)
+        }
+        .fullScreenCover(item: Binding(get: { router.sheet?.isFullScreen == true ? router.sheet : nil }, set: { router.sheet = $0 })) { sheet in
             SheetHost(sheet: sheet)
                 .environment(router)
                 .environment(library)

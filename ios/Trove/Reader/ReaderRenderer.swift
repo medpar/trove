@@ -83,17 +83,18 @@ nonisolated struct ReaderRenderer {
         self.style = style
     }
 
-    @concurrent static func render(item: Item, markdown: String?, style: ReaderStyle) async -> RenderedDocument {
+    /// `loaded` is false while the archived copy is still on its way (the header renders first).
+    @concurrent static func render(item: Item, markdown: String?, loaded: Bool, style: ReaderStyle) async -> RenderedDocument {
         var r = ReaderRenderer(item: item, style: style)
-        return r.document(markdown: markdown ?? "")
+        return r.document(markdown: markdown ?? "", loaded: loaded)
     }
 
     // MARK: Document
 
-    private mutating func document(markdown: String) -> RenderedDocument {
+    private mutating func document(markdown: String, loaded: Bool) -> RenderedDocument {
         let out = NSMutableAttributedString()
         var (body, highlights) = Self.clean(markdown, note: item.note)
-        header(into: out)
+        header(into: out, bodyHasImage: !loaded || body.contains("![") || body.contains("<image"))
         let bodyStart = out.length
         if item.isX, body.hasPrefix("[**"), Self.firstLine(body).contains("@") {
             body = Self.dropFirstLine(body)
@@ -117,8 +118,17 @@ nonisolated struct ReaderRenderer {
 
     // MARK: Header
 
-    private mutating func header(into out: NSMutableAttributedString) {
-        let showsCover = item.coverURL != nil && !["X bookmark", "Post", "Image", "Note", "Audio"].contains(item.type)
+    private mutating func header(into out: NSMutableAttributedString, bodyHasImage: Bool) {
+        let mediaTypes = ["X bookmark", "Post", "Image"]
+        let showsCover = item.coverURL != nil && !mediaTypes.contains(item.type) && !["Note", "Audio"].contains(item.type)
+        // Pins, posts and images whose archived text has no picture: show the cover at its own shape.
+        if mediaTypes.contains(item.type), !bodyHasImage, let cover = item.coverURL {
+            let a = ImageAttachment(source: cover, scale: style.scale)
+            let s = NSMutableAttributedString(attachment: a)
+            s.addAttribute(.paragraphStyle, value: para(after: style.size * 0.9, lineHeight: 1, alignment: .center), range: NSRange(location: 0, length: s.length))
+            out.append(s)
+            out.append(newline())
+        }
         if showsCover, let cover = item.coverURL {
             let a = ImageAttachment(source: cover, scale: style.scale)
             a.showsPlay = item.type == "Video"

@@ -31,6 +31,9 @@ import SwiftUI
         case related(Item)
         case manageFeeds
 
+        /// The image viewer covers the whole screen; everything else is a sheet.
+        var isFullScreen: Bool { if case .image = self { true } else { false } }
+
         var id: String {
             switch self {
             case .add: "add"

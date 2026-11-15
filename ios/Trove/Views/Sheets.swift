@@ -210,19 +210,30 @@ struct ImageViewer: View {
     }
 }
 
+/// Keeps the image filling the view at 1×, through rotations and resizes.
+final class ZoomScrollView: UIScrollView {
+    let imageView = UIImageView()
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if zoomScale == 1 { imageView.frame = bounds }
+    }
+}
+
 /// Pinch and double-tap to zoom, backed by UIScrollView for smooth native zooming.
 struct ZoomableImage: UIViewRepresentable {
     let image: UIImage
 
-    func makeUIView(context: Context) -> UIScrollView {
-        let scroll = UIScrollView()
+    func makeUIView(context: Context) -> ZoomScrollView {
+        let scroll = ZoomScrollView()
         scroll.delegate = context.coordinator
         scroll.maximumZoomScale = 5
         scroll.minimumZoomScale = 1
         scroll.showsHorizontalScrollIndicator = false
         scroll.showsVerticalScrollIndicator = false
         scroll.backgroundColor = .clear
-        let view = UIImageView(image: image)
+        scroll.contentInsetAdjustmentBehavior = .never
+        let view = scroll.imageView
+        view.image = image
         view.contentMode = .scaleAspectFit
         view.isUserInteractionEnabled = true
         scroll.addSubview(view)
@@ -233,11 +244,8 @@ struct ZoomableImage: UIViewRepresentable {
         return scroll
     }
 
-    func updateUIView(_ scroll: UIScrollView, context: Context) {
-        DispatchQueue.main.async {
-            guard scroll.zoomScale == 1 else { return }
-            context.coordinator.imageView?.frame = scroll.bounds
-        }
+    func updateUIView(_ scroll: ZoomScrollView, context: Context) {
+        if scroll.imageView.image !== image { scroll.imageView.image = image }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator() }

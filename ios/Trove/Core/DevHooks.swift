@@ -44,6 +44,13 @@ enum DevHooks {
             scene.requestGeometryUpdate(.iOS(interfaceOrientations: .landscapeRight)) { _ in }
         }
         if let image = value("IMAGE").flatMap(URL.init(string:)) { router.sheet = .image(image) }
+        if let text = value("TOAST") {
+            let delay = value("TOASTDELAY").flatMap(Double.init) ?? 0
+            Task {
+                try? await Task.sleep(for: .seconds(delay))
+                library.show(Toast(text: text, systemImage: "checkmark.circle.fill", actionLabel: "Open", action: {}))
+            }
+        }
         switch value("SHEET") {
         case "add": router.sheet = .add(value("TEXT"))
         case "ask": router.sheet = .ask(value("ASK"))

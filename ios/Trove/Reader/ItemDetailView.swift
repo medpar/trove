@@ -169,7 +169,7 @@ struct ItemDetailView: View {
         // The reader's own size setting, scaled like body text for people who use larger (or smaller) Dynamic Type.
         let size = min(UIFontMetrics(forTextStyle: .body).scaledValue(for: CGFloat(readerSize)), CGFloat(readerSize) * 1.8)
         let style = ReaderStyle(size: size.rounded(), serif: readerSerif, scale: displayScale)
-        let doc = await ReaderRenderer.render(item: item, markdown: contentLoaded ? markdown : nil, style: style)
+        let doc = await ReaderRenderer.render(item: item, markdown: contentLoaded ? markdown : nil, loaded: contentLoaded, style: style)
         guard !Task.isCancelled else { return }
         document = doc
     }

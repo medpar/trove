@@ -406,6 +406,11 @@ struct ReaderView: UIViewRepresentable {
         let view = ReaderTextView()
         view.delegate = context.coordinator
         context.coordinator.textView = view
+        // Taps on images open the viewer (text items only report links reliably).
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.tapped(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = context.coordinator
+        view.addGestureRecognizer(tap)
         return view
     }
 
@@ -433,7 +438,7 @@ struct ReaderView: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, UITextViewDelegate {
+    final class Coordinator: NSObject, UITextViewDelegate, UIGestureRecognizerDelegate {
         var parent: ReaderView
         weak var textView: ReaderTextView?
         var installedID: String?
@@ -442,6 +447,23 @@ struct ReaderView: UIViewRepresentable {
         private var lastReported: Double = -10
 
         init(_ parent: ReaderView) { self.parent = parent }
+
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+
+        @objc func tapped(_ g: UITapGestureRecognizer) {
+            guard let tv = textView, tv.selectedRange.length == 0, tv.textStorage.length > 0 else { return }
+            var p = g.location(in: tv)
+            p.x -= tv.textContainerInset.left
+            p.y -= tv.textContainerInset.top
+            let layout = tv.readerLayout
+            let glyph = layout.glyphIndex(for: p, in: tv.textContainer, fractionOfDistanceThroughGlyph: nil)
+            let index = layout.characterIndexForGlyph(at: glyph)
+            guard index < tv.textStorage.length,
+                  let image = tv.textStorage.attribute(.attachment, at: index, effectiveRange: nil) as? ImageAttachment,
+                  image.fixedSize == nil, !image.showsPlay,
+                  let rect = layout.attachmentRect(at: index), rect.insetBy(dx: -4, dy: -4).contains(p) else { return }
+            parent.onImage(image.source)
+        }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) {
             guard let tv = textView, tv.isTracking || tv.isDecelerating || tv.isDragging else { return }
