@@ -191,14 +191,14 @@ const card = (id, show, title, series, img, { yt, sp, status, pct, pos, dur, p =
   last: { p, at: NOW - h * 3600e3 }, updated: ago(h), notionUrl: 'https://www.notion.so/',
 });
 const CONTINUE = [
-  card('c1', 'The Dirt Road Diaries', 'Episode 112: Starting over at forty', null, 12, { yt: 1, sp: 1, status: 'started', pct: 0.38, pos: 1664, dur: 4380, p: 'sp', h: 1 }),
+  card('c1', 'The Dirt Road Diaries', 'Episode 112: Starting over at forty', null, 12, { yt: 1, sp: 1, status: 'started', pct: 0.38, pos: 1664, dur: 4380, p: 'sp', h: 1, released: ago(0 * 24 * 7 + 30).slice(0, 10) }),
   card('c2', 'Build Notes', '#58 Shipping a database in a weekend (and regretting it)', null, 32, { yt: 1, sp: 1, status: 'started', pct: 0.71, pos: 2350, dur: 3310, p: 'yt', h: 5 }),
   card('c3', 'Slow History', 'The salt roads of the Sahara, part 2', 'Trade Routes', 33, { sp: 1, status: 'started', pct: 0.12, pos: 610, dur: 5100, p: 'sp', h: 26 }),
-  card('c4', 'The Dirt Road Diaries', 'Road Stories: a night in Albuquerque', 'Road Stories', 34, { yt: 1, sp: 0, status: 'started', pct: 0.55, pos: 980, dur: 1790, p: 'yt', h: 40 }),
+  card('c4', 'The Dirt Road Diaries', 'Road Stories: a night in Albuquerque', 'Road Stories', 34, { yt: 1, sp: 0, status: 'started', pct: 0.55, pos: 980, dur: 1790, p: 'yt', h: 40, released: ago(1 * 24 * 7 + 30).slice(0, 10) }),
 ];
 const FINISHED = [
   card('d1', 'Build Notes', '#57 What we learned from 1,000 support tickets', null, 32, { yt: 1, sp: 1, status: 'finished', pct: 1, dur: 3020, p: 'sp', h: 20 }),
-  card('d2', 'The Dirt Road Diaries', 'Episode 111: The year without a phone', null, 12, { yt: 1, sp: 1, status: 'finished', pct: 1, dur: 4010, p: 'yt', h: 50 }),
+  card('d2', 'The Dirt Road Diaries', 'Episode 111: The year without a phone', null, 12, { yt: 1, sp: 1, status: 'finished', pct: 1, dur: 4010, p: 'yt', h: 50, released: ago(2 * 24 * 7 + 30).slice(0, 10) }),
   card('d3', 'Slow History', 'The salt roads of the Sahara, part 1', 'Trade Routes', 33, { sp: 1, status: 'finished', pct: 1, dur: 4880, p: 'sp', h: 75 }),
 ];
 function showData(id) {
@@ -207,10 +207,11 @@ function showData(id) {
   const episodes = titles.map((t, i) => {
     const series = t.startsWith('Road Stories') ? 'Road Stories' : null;
     const c = [...CONTINUE, ...FINISHED].find((x) => x.title.includes(t.split(': ')[1] || t));
-    const dur = series ? 1500 + i * 60 : 3800 + i * 90;
-    return { key: `r${i}`, title: t, date: ago(i * 24 * 7 + 30).slice(0, 10), dur, series, image: show.image, sp: series && i % 2 ? null : { id: `s${i}`, dur, title: t }, yt: { id: `y${i}`, dur, title: t }, pairedBy: 'catalog', card: c || (i > 6 ? card(`x${i}`, show.title, t, series, 12, { yt: 1, sp: 1, status: 'finished', pct: 1, dur, h: 300 + i }) : null) };
+    const dur = c ? (c.yt || c.sp).dur : series ? 1500 + i * 60 : 3800 + i * 90;
+    const onSp = !(series && i % 2);
+    return { key: `r${i}`, title: t, date: ago(i * 24 * 7 + 30).slice(0, 10), dur, series, image: show.image, sp: onSp ? { id: `s${i}`, dur, title: t } : null, yt: { id: `y${i}`, dur, title: t }, pairedBy: 'catalog', card: c || (i > 6 ? card(`x${i}`, show.title, t, series, 12, { yt: 1, sp: onSp, status: 'finished', pct: 1, dur, p: onSp ? 'sp' : 'yt', h: 300 + i }) : null) };
   });
-  return { show, catalog: { at: NOW - 3600e3, error: null, spotify: 112, youtube: 118, paired: 109 }, series: [{ name: 'Road Stories', count: 24, finished: 9, started: 1 }], episodes };
+  return { show, catalog: { at: NOW - 3600e3, error: null, spotify: 8, youtube: 10, paired: 8 }, series: [{ name: 'Road Stories', count: 3, finished: 1, started: 1 }], episodes };
 }
 
 const side = (user) => ({ connected: true, at: NOW - 40 * 60e3, ok: true, error: null, needsSignIn: false, user });

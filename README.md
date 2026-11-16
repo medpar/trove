@@ -64,7 +64,7 @@ A personal library that archives what you save into your own Notion, so nothing 
 <p align="center">
   <img src="docs/screenshots/mobile-library.webp" width="24%" alt="Library on a phone">
   <img src="docs/screenshots/mobile-reader.webp" width="24%" alt="Reader on a phone">
-  <img src="docs/screenshots/mobile-shows.webp" width="24%" alt="Shows on a phone, dark mode">
+  <img src="docs/screenshots/mobile-shows.webp" width="24%" alt="Shows on a phone">
   <img src="docs/screenshots/extension.webp" width="24%" alt="Browser extension popup">
 </p>
 <img src="docs/screenshots/show.webp" alt="A show's episodes, paired across YouTube and Spotify">

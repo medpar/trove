@@ -60,7 +60,7 @@
     .gallery figcaption { color: var(--muted); font-size: 14.5px; margin-top: 10px; }
     .gallery figcaption b { color: var(--text); }
     .phones { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
-    .phones .shot { width: min(240px, 44vw); border-radius: 26px; border: 8px solid #111; }
+    .phones .shot { width: min(300px, 46vw); box-shadow: none; }
     .phones .ext { width: min(280px, 90vw); border-radius: 12px; border: 1px solid var(--border); align-self: flex-start; }
     .sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface); }
     .sources div { padding: 16px 18px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
@@ -170,7 +170,7 @@
       <p class="lead">An installable web app and a native iPhone/iPad app, plus an extension that saves the page you're on and tells you where you left off in a video.</p>
       <div class="phones">
         <img class="shot" src="screenshots/mobile-library.webp" alt="Library on a phone" loading="lazy" />
-        <img class="shot" src="screenshots/mobile-shows.webp" alt="Shows on a phone, dark mode" loading="lazy" />
+        <img class="shot" src="screenshots/mobile-shows.webp" alt="Shows on a phone" loading="lazy" />
         <img class="ext shot" src="screenshots/extension.webp" alt="Browser extension popup" loading="lazy" />
       </div>
     </section>

@@ -3,7 +3,7 @@
 
   node scripts/screenshots/demo-server.mjs &          # fake API on :8790
   npm --prefix web run dev -- --port 3210 &           # the web app
-  python3 scripts/screenshots/capture.py              # -> docs/screenshots/*.png
+  python3 scripts/screenshots/capture.py              # -> docs/screenshots/*.webp
 
 The web app runs as usual, but every /api request (and the local agent bridge) is answered by the demo
 server, so no real library data can appear. Uses Playwright with the installed Google Chrome.
@@ -35,6 +35,22 @@ def to_demo(route):
     with urlopen(r) as res:
         route.fulfill(status=res.status, headers={k: v for k, v in res.headers.items() if k.lower() not in ('content-length', 'transfer-encoding', 'connection')}, body=res.read())
 
+
+
+def favicon(route):
+    """Real sites keep their icons; the sample library's made-up domains get a letter icon instead of a 404."""
+    try:
+        res = route.fetch()
+        if res.ok:
+            return route.fulfill(response=res)
+    except Exception:
+        pass
+    m = re.search(r'domain=([^&]+)', route.request.url)
+    domain = (m.group(1) if m else 'x').replace('%2E', '.')
+    hue = int(hashlib.md5(domain.encode()).hexdigest()[:4], 16) % 360
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="hsl({hue},45%,46%)"/>'
+           f'<text x="32" y="44" text-anchor="middle" font-family="system-ui,sans-serif" font-weight="700" font-size="34" fill="#fff">{domain[0].upper()}</text></svg>')
+    route.fulfill(status=200, headers={'content-type': 'image/svg+xml'}, body=svg)
 
 
 POPUP_STUB = r"""
@@ -110,8 +126,8 @@ def hero_html():
     .bar i{{width:12px;height:12px;border-radius:50%;background:#ff5f57}} .bar i:nth-child(2){{background:#febc2e}} .bar i:nth-child(3){{background:#28c840}}
     .bar span{{margin-left:16px;flex:0 0 420px;height:24px;border-radius:7px;background:#fff;color:#888;font-size:13px;display:flex;align-items:center;padding-left:12px}}
     .win img{{display:block;width:100%}}
-    .phone{{position:absolute;right:56px;top:150px;width:330px;border-radius:46px;padding:12px;background:#111;box-shadow:0 30px 80px rgba(0,0,0,.35)}}
-    .phone img{{display:block;width:100%;border-radius:36px}}
+    .phone{{position:absolute;right:-10px;top:150px;width:470px}}
+    .phone img{{display:block;width:100%}}
     .pop{{position:absolute;left:800px;top:330px;width:300px;border-radius:12px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.28);border:1px solid #e7e4de}}
     .pop img{{display:block;width:100%}}
     </style>
@@ -120,11 +136,65 @@ def hero_html():
     <div class="phone"><img src="{data_uri('mobile-shows')}"></div>"""
 
 
+# iPhone 16 Pro: 393 x 852 pt screen. The page is drawn below the status bar, as an app added to the home screen.
+PHONE_W, PHONE_H, STATUS_H = 393, 852, 54
+
+STATUS_ICONS = """
+<svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="7.5" width="3" height="4.5" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+<svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 2.6c2.3 0 4.4.9 6 2.4l1.1-1.2A10.2 10.2 0 0 0 8 1C5.3 1 2.8 2 .9 3.8L2 5c1.6-1.5 3.7-2.4 6-2.4Zm0 3.3c1.4 0 2.6.5 3.6 1.4l1.1-1.2A6.8 6.8 0 0 0 8 4.3c-1.8 0-3.4.7-4.7 1.8l1.1 1.2c1-.9 2.2-1.4 3.6-1.4Zm0 3.3c.5 0 1 .2 1.3.5L8 11.2 6.7 9.7c.3-.3.8-.5 1.3-.5Z"/></svg>
+<svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.8" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="20" height="9" rx="2.5"/><path d="M25 4.5v4c.8-.3 1.3-1.1 1.3-2s-.5-1.7-1.3-2Z" opacity=".45"/></svg>"""
+
+
+def phone_html(screen, bg, dark):
+    """A page screenshot inside an iPhone: titanium band, black bezel, Dynamic Island, status bar and home indicator."""
+    ink = '#fff' if dark else '#000'
+    return f"""<!doctype html><meta charset="utf-8"><style>
+    html,body{{margin:0;background:transparent}}
+    body{{padding:40px 70px 120px;display:inline-block;font-family:-apple-system,'SF Pro Text',system-ui,sans-serif}}
+    .dev{{position:relative;width:{PHONE_W + 18}px;height:{PHONE_H + 18}px;border-radius:65px;padding:9px;box-sizing:border-box;
+      background:#0b0b0c;box-shadow:0 0 0 2.5px #9c9a96,0 0 0 3.5px #5f5d5a,inset 0 0 0 1px #2a2a2c,0 40px 70px -20px rgba(40,25,10,.38),0 18px 30px -12px rgba(0,0,0,.25)}}
+    .dev::before{{content:'';position:absolute;inset:-3.5px;border-radius:68.5px;pointer-events:none;
+      background:linear-gradient(135deg,rgba(255,255,255,.55),rgba(255,255,255,0) 22%,rgba(255,255,255,0) 78%,rgba(255,255,255,.35));
+      -webkit-mask:linear-gradient(#000 0 0) content-box exclude,linear-gradient(#000 0 0);padding:3.5px;box-sizing:border-box}}
+    .btn{{position:absolute;width:4px;border-radius:2px;background:linear-gradient(90deg,#6d6b67,#b9b6b0 60%,#7d7b77)}}
+    .l{{left:-7px}} .r{{right:-7px}}
+    .screen{{position:relative;width:{PHONE_W}px;height:{PHONE_H}px;border-radius:56px;overflow:hidden;background:{bg}}}
+    .screen img{{position:absolute;left:0;top:{STATUS_H}px;width:{PHONE_W}px;display:block}}
+    .status{{position:absolute;inset:0 0 auto;height:{STATUS_H}px;display:flex;align-items:center;justify-content:space-between;padding:4px 30px 0 52px;box-sizing:border-box;color:{ink};background:{bg};z-index:1}}
+    .time{{font-weight:600;font-size:17px;letter-spacing:-.2px;width:56px;text-align:center}}
+    .icons{{display:flex;gap:6px;align-items:center;fill:currentColor}}
+    .island{{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:124px;height:36px;border-radius:20px;background:#000;z-index:2}}
+    .home{{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:139px;height:5px;border-radius:3px;background:{ink};opacity:.85;z-index:2}}
+    </style>
+    <div class="dev">
+      <i class="btn l" style="top:150px;height:34px"></i><i class="btn l" style="top:212px;height:64px"></i><i class="btn l" style="top:290px;height:64px"></i>
+      <i class="btn r" style="top:250px;height:100px"></i>
+      <div class="screen"><div class="status"><span class="time">9:41</span><span class="icons">{STATUS_ICONS}</span></div>
+        <div class="island"></div><img src="data:image/png;base64,{base64.b64encode(screen).decode()}"><div class="home"></div></div>
+    </div>"""
+
+
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     cookie = session_cookie()
+    problems = []
     with sync_playwright() as p:
         browser = p.chromium.launch(channel='chrome', headless=True)
+
+        def track(pg):
+            pg._errors = []
+            pg.on('console', lambda m: m.type == 'error' and pg._errors.append(f'console: {m.text[:200]}'))
+            pg.on('pageerror', lambda e: pg._errors.append(f'page error: {e}'))
+            pg.on('requestfailed', lambda r: pg._errors.append(f'failed: {r.url[:120]} ({r.failure})'))
+            pg.on('response', lambda r: r.status >= 400 and pg._errors.append(f'HTTP {r.status}: {r.url[:120]}'))
+
+        def check(pg, name):
+            """Broken images and anything the page logged as an error count as a failed screenshot."""
+            broken = pg.evaluate("""[...document.images].filter(i => i.complete && i.naturalWidth === 0 && i.getAttribute('src')).map(i => 'broken image: ' + i.src.slice(0, 120))""")
+            errs = pg._errors + broken
+            if errs:
+                problems.append((name, errs))
+            print('✗' if errs else '✓', name, *(f'\n    {e}' for e in errs))
 
         def page(w=1440, h=900, dark=False, mobile=False, init=''):
             ctx = browser.new_context(viewport={'width': w, 'height': h}, device_scale_factor=2, is_mobile=mobile, has_touch=mobile,
@@ -133,6 +203,7 @@ def main():
             ctx.route(f'{APP}/api/**', to_demo)
             ctx.route(f'{APP}/demo-cover/**', to_demo)
             ctx.route('http://127.0.0.1:7878/**', to_demo)
+            ctx.route('https://www.google.com/s2/favicons**', favicon)
             ctx.add_init_script(f"""try {{
               localStorage.setItem('trove-theme', {json.dumps('dark' if dark else 'light')});
               localStorage.removeItem('trove-view');
@@ -140,20 +211,31 @@ def main():
             }} catch (e) {{}}
             {init}""")
             pg = ctx.new_page()
+            track(pg)
             return pg
 
-        def shot(name, path, settle=1800, before=None, **kw):
+        def shot(name, path, settle=1800, before=None, mobile=False, dark=False, **kw):
             if ONLY and name not in ONLY:
                 return
-            pg = page(**kw)
+            if mobile:
+                kw.update(w=PHONE_W, h=PHONE_H - STATUS_H, mobile=True)
+            pg = page(dark=dark, **kw)
             pg.goto(APP + path, wait_until='networkidle')
             pg.add_style_tag(content='nextjs-portal{display:none!important}')
             pg.wait_for_timeout(settle)
             if before:
                 before(pg)
                 pg.wait_for_timeout(900)
-            pg.screenshot(path=str(OUT / f'{name}.png'))
-            print('✓', name)
+            if mobile:
+                bg = pg.evaluate("getComputedStyle(document.body).backgroundColor")
+                raw = pg.screenshot()
+                frame = page(w=520, h=960)
+                frame.set_content(phone_html(raw, bg, dark))
+                frame.locator('body').screenshot(path=str(OUT / f'{name}.png'), omit_background=True)
+                frame.context.close()
+            else:
+                pg.screenshot(path=str(OUT / f'{name}.png'))
+            check(pg, name)
             pg.context.close()
 
         shot('library', '/')
@@ -168,9 +250,9 @@ def main():
         shot('show', '/?s=shows&show=sh1')
         shot('palette', '/', before=lambda pg: (pg.keyboard.press('Meta+k'), pg.keyboard.type('ask')))
         shot('settings', '/settings')
-        shot('mobile-library', '/', w=390, h=844, mobile=True)
-        shot('mobile-reader', '/?item=demo-1', w=390, h=844, mobile=True)
-        shot('mobile-shows', '/?s=shows', w=390, h=844, mobile=True, dark=True)
+        shot('mobile-library', '/', mobile=True)
+        shot('mobile-reader', '/?item=demo-1', mobile=True)
+        shot('mobile-shows', '/?s=shows', mobile=True)
 
         # Extension popup, from the extension's own files with a stubbed chrome.* API.
         if not ONLY or 'extension' in ONLY:
@@ -181,14 +263,16 @@ def main():
                 ct = {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html', '.png': 'image/png', '.svg': 'image/svg+xml'}.get(f.suffix, 'application/octet-stream')
                 route.fulfill(status=200 if f.exists() else 404, headers={'content-type': ct}, body=f.read_bytes() if f.exists() else b'')
             ctx.route('http://ext.trove/**', serve)
+            ctx.route('https://www.google.com/s2/favicons**', favicon)
             ctx.add_init_script(POPUP_STUB)
             pg = ctx.new_page()
+            track(pg)
             pg.goto('http://ext.trove/ui/popup.html', wait_until='networkidle')
             pg.wait_for_timeout(800)
             h = pg.evaluate('document.documentElement.scrollHeight')
             pg.set_viewport_size({'width': 380, 'height': h})
             pg.screenshot(path=str(OUT / 'extension.png'))
-            print('✓ extension')
+            check(pg, 'extension')
             ctx.close()
 
         if not ONLY or 'cli' in ONLY:
@@ -217,6 +301,8 @@ def main():
         for png in OUT.glob('*.png'):
             subprocess.run(['cwebp', '-quiet', '-q', '86', '-m', '6', str(png), '-o', str(png.with_suffix('.webp'))], check=True)
             png.unlink()
+    if problems:
+        sys.exit(f'{len(problems)} screenshot(s) had errors: ' + ', '.join(n for n, _ in problems))
 
 
 if __name__ == '__main__':
