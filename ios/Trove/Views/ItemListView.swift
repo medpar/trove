@@ -218,6 +218,10 @@ struct ItemListView: View {
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
+            // On iPhone the sidebar, where Shows lives, is a level up behind the back button: keep Shows one tap away.
+            if sizeClass == .compact {
+                Button { router.destination = .shows } label: { Label("Shows", systemImage: "headphones") }
+            }
             Button { router.sheet = .ask(nil) } label: { Label("Ask Trove", systemImage: "sparkles") }
             Menu {
                 Picker("Layout", selection: $layout) {
