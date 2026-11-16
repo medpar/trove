@@ -166,9 +166,15 @@ export function Dialog({ onClose, children, className = '', label, instant }: { 
 
 // ---------- visuals ----------
 
-export function Favicon({ domain, size = 16, className = '' }: { domain: string; size?: number; className?: string }) {
+/** The site's icon. Items with no website (notes, uploads) or an icon that won't load show their type's icon instead. */
+export function Favicon({ domain, type, size = 16, className = '' }: { domain: string; type?: string; size?: number; className?: string }) {
   const [err, setErr] = useState(false);
-  if (err || !domain) return <span className={className} style={{ width: size, height: size, borderRadius: 4, background: 'var(--bg-active)', display: 'inline-block', flex: 'none' }} />;
+  if (err || !domain)
+    return (
+      <span className={className} aria-hidden="true" style={{ width: size, height: size, borderRadius: Math.max(3, Math.round(size / 5)), background: 'var(--bg-active)', color: 'var(--muted)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
+        <TypeIcon type={type || 'Link'} size={Math.max(9, Math.round(size * 0.68))} />
+      </span>
+    );
   // eslint-disable-next-line @next/next/no-img-element
   return <img className={className} src={favicon(domain, size > 20 ? 128 : 64)} width={size} height={size} alt="" loading="lazy" onError={() => setErr(true)} />;
 }

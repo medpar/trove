@@ -112,7 +112,7 @@ export function AddDialog({ initial = '', defaults, stats, onClose, onOpen }: { 
                 ) : (
                   <Check size={15} className="ok-icon" />
                 )}
-                {r.item ? <Favicon domain={r.item.domain} size={16} /> : <Link2 size={14} />}
+                {r.item ? <Favicon domain={r.item.domain} type={r.item.type} size={16} /> : <Link2 size={14} />}
                 <span className="label">{r.label}</span>
                 <span className={`state ${r.state === 'error' ? 'error' : ''}`}>
                   {r.state === 'saved' ? 'Saved' : r.state === 'exists' ? 'Already saved' : r.state === 'error' ? r.error : r.state === 'saving' ? 'Archiving…' : 'Waiting'}

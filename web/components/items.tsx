@@ -29,7 +29,7 @@ function Cover({ it }: { it: Item }) {
   return (
     <div className="cover-fallback">
       <span className="fav-tile">
-        <Favicon domain={it.domain} size={24} />
+        <Favicon domain={it.domain} type={it.type} size={24} />
       </span>
       <span className="host">{it.domain || it.type}</span>
     </div>
@@ -45,9 +45,13 @@ function badge(it: Item) {
 
 const Meta = ({ it }: { it: Item }) => (
   <div className="meta">
-    <Favicon domain={it.domain} size={14} />
-    <span className="host">{host(it)}</span>
-    <span className="sep" aria-hidden="true">·</span>
+    {host(it) && (
+      <>
+        <Favicon domain={it.domain} size={14} />
+        <span className="host">{host(it)}</span>
+        <span className="sep" aria-hidden="true">·</span>
+      </>
+    )}
     <TypeIcon type={it.type} size={12} />
     <span className="sep" aria-hidden="true">·</span>
     <time dateTime={it.created} title={new Date(it.created).toLocaleString()}>{timeAgo(it.created)}</time>
@@ -126,8 +130,8 @@ const CardView = memo(function CardView({ it, selected, checked, h }: { it: Item
         <Actions it={it} h={h} />
         <div className="card-body">
           <div className="card-author">
-            <Favicon domain={it.domain} size={16} />
-            <span>{it.author || host(it)}</span>
+            <Favicon domain={it.domain} type={it.type} size={16} />
+            <span>{it.author || host(it) || it.type}</span>
           </div>
           {showTitle && <h3 className="card-title">{it.title}</h3>}
           <p className="card-text">{text}</p>
@@ -177,7 +181,7 @@ const RowView = memo(function RowView({ it, selected, checked, h }: { it: Item; 
           h.onCheck(it, e.shiftKey);
         }}
       >
-        {checked ? <Check size={13} className="strong" /> : <Favicon domain={it.domain} size={16} />}
+        {checked ? <Check size={13} className="strong" /> : <Favicon domain={it.domain} type={it.type} size={16} />}
       </button>
       <div className="row-main">
         <div className="row-title">{it.title || it.url}</div>
@@ -219,7 +223,7 @@ const HeadlineView = memo(function HeadlineView({ it, selected, checked, h }: { 
       }}
       data-id={it.id}
     >
-      <Favicon domain={it.domain} size={16} />
+      <Favicon domain={it.domain} type={it.type} size={16} />
       <span className="t">
         {it.title || it.url}
         <span className="host">{host(it)}</span>
@@ -237,7 +241,7 @@ function Tile({ it, h }: { it: Item; h: ItemHandlers }) {
       <button className="tile text" onClick={(e) => open(it, e, h)} data-id={it.id}>
         {it.title}
         <div className="meta">
-          <Favicon domain={it.domain} size={14} /> <span className="host">{host(it)}</span>
+          <Favicon domain={it.domain} type={it.type} size={14} /> <span className="host">{host(it)}</span>
         </div>
       </button>
     );

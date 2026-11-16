@@ -91,7 +91,7 @@ export function AskPanel({ initial = '', onClose, onOpen }: { initial?: string; 
                 {res.sources.map((s, i) => (
                   <button key={s.id} className="related-row" onClick={() => onOpen(s.id)}>
                     <span className="cite static">{i + 1}</span>
-                    <Favicon domain={s.domain} size={16} />
+                    <Favicon domain={s.domain} type={s.type} size={16} />
                     <span className="t">
                       <span className="title">{s.title || s.url}</span>
                       <span className="sub">{[s.collection, s.domain].filter(Boolean).join(' · ')}</span>

@@ -59,7 +59,7 @@ export default function QuickSave() {
         {item && (
           <>
             <div className="quick-item">
-              <Favicon domain={item.domain} size={20} />
+              <Favicon domain={item.domain} type={item.type} size={20} />
               <div style={{ minWidth: 0 }}>
                 <div className="t">{item.title}</div>
                 <div className="d">{item.domain}</div>

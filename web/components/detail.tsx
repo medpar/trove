@@ -322,7 +322,7 @@ export function Detail({ id, seed, stats, onClose, onDelete, onAsk, onOpen }: Pr
           <div>
             {item.url && (
               <a className="source-link" href={item.url} target="_blank" rel="noreferrer">
-                <Favicon domain={item.domain} size={14} />
+                <Favicon domain={item.domain} type={item.type} size={14} />
                 <span>{item.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
               </a>
             )}
@@ -509,7 +509,7 @@ export function Detail({ id, seed, stats, onClose, onDelete, onAsk, onOpen }: Pr
               <div className="related">
                 {related.data.items.map((r) => (
                   <button key={r.id} className="related-row" onClick={() => onOpen?.(r.id)}>
-                    <Favicon domain={r.domain} size={16} />
+                    <Favicon domain={r.domain} type={r.type} size={16} />
                     <span className="t">
                       <span className="title">{r.title || r.url}</span>
                       <span className="sub">{[r.collection, r.domain, timeAgo(r.created)].filter(Boolean).join(' · ')}</span>

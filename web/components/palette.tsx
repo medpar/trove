@@ -80,7 +80,7 @@ export function Palette({ stats, onClose, onScope, onOpen, onAdd, onAgent, onAsk
     out.push(...actions.filter((a) => match(a.label)));
     for (const c of stats?.collections || []) if (term && match(c.name)) out.push({ id: `c-${c.name}`, group: 'Collections', label: c.name, sub: String(c.count), icon: <Folder size={16} />, run: close(() => onScope({ kind: 'collection', value: c.name })) });
     for (const t of stats?.tags || []) if (term && match(t.name)) out.push({ id: `t-${t.name}`, group: 'Tags', label: `#${t.name}`, sub: String(t.count), icon: <Hash size={16} />, run: close(() => onScope({ kind: 'tag', value: t.name })) });
-    for (const it of results) out.push({ id: `i-${it.id}`, group: 'Items', label: it.title || it.url, sub: timeAgo(it.created), icon: <Favicon domain={it.domain} size={16} />, run: close(() => onOpen(it)) });
+    for (const it of results) out.push({ id: `i-${it.id}`, group: 'Items', label: it.title || it.url, sub: timeAgo(it.created), icon: <Favicon domain={it.domain} type={it.type} size={16} />, run: close(() => onOpen(it)) });
     return out.slice(0, 60);
   }, [q, stats, results, onAdd, onAgent, onAsk, onClose, onOpen, onScope, onSearch, onTheme, onView]);
 
