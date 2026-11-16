@@ -26,6 +26,7 @@ type SyncState = {
   /** Copies whose length Trove doesn't know yet (paired by a search, by hand, or by an older catalog). */
   lengths?: string[];
   /** When everything in Notion was last checked for missing lengths (daily). */
+  lengthCheck?: number;
   lengthScan?: number;
   running?: number;
 };
@@ -440,10 +441,11 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
   // Lengths of copies paired without one, a few per run: this run's first.
   let lengths = [...new Set([...cards.flatMap(missingLength), ...(st.lengths || [])])];
   // Once a day, everything in Notion (copies linked by hand when the lookup failed, older pairs).
-  if (Date.now() - (st.lengthScan || 0) > LENGTH_SCAN_EVERY && Date.now() < deadline - 30_000) {
+  if (Date.now() - (st.lengthCheck || 0) > LENGTH_SCAN_EVERY && Date.now() < deadline - 30_000) {
     try {
       lengths = [...new Set([...lengths, ...(await missingLengthRefs())])];
-      st.lengthScan = Date.now();
+      st.lengthCheck = Date.now();
+      delete st.lengthScan;
     } catch { /* next run */ }
   }
   if (lengths.length && Date.now() < deadline - 15_000) {

@@ -25,6 +25,8 @@ const V6 = 'fffffffffff';
 const V6RE = 'rrrrrrrrrrr';
 const E7 = '7'.repeat(22);
 const V7 = 'ggggggggggg';
+const E8 = '8'.repeat(22);
+const V8 = 'hhhhhhhhhhh';
 const world = { anonymous: false, played: { [E1]: [900_000, 'IN_PROGRESS'], [E2]: [0, 'COMPLETED'] }, history: { [V1]: 37, [V2]: 100 }, rotate: 'rotated-1' };
 const seen = [];
 
@@ -73,7 +75,8 @@ async function fakeFetch(input, init = {}) {
     const hits = /Ep A/.test(q) ? [video(V1, 'Ep A: The Future of Agents', '1:00:06')]
       : /Ep D/.test(q) ? [video(V4, 'Ep D: Robots at Home', '25:00')]
         : /Ep F/.test(q) ? [video(V6RE, 'Ep F: Deep Sea', '30:00', 'Random Reuploads'), video(V6, 'Ep F: Deep Sea | Test Show', '28:50')]
-          : [];
+          : q === V8 ? [video(V8, 'Ep H: Glaciers', '18:20')]
+            : [];
     return json({ contents: { items: hits } });
   }
   if (url.hostname === 'www.youtube.com' && url.pathname.startsWith('/youtubei/v1/player')) {
@@ -202,16 +205,19 @@ test("the twin search prefers the show's own channel, and finds videos in shows 
 test('a copy paired without its length gets it on the next sync, so positions map across', async () => {
   // Paired by hand or by an older catalog: Trove knows the video's id but not its length.
   await E.applyEvents([{ p: 'sp', id: E7, at: Date.now(), title: 'Ep G: Volcanoes', dur: 1600, ext: { pos: 800 }, src: 'spotify', twin: { p: 'yt', id: V7, by: 'manual' } }]);
+  // YouTube won't give V8's player details to a server; a search for its id finds it.
+  await E.applyEvents([{ p: 'sp', id: E8, at: Date.now(), title: 'Ep H: Glaciers', dur: 1160, ext: { pos: 300 }, src: 'spotify', twin: { p: 'yt', id: V8, by: 'manual' } }]);
   assert.equal((await E.lookupRefs([`yt:${V7}`]))[`yt:${V7}`].yt.dur, null);
   // A day after the last check for missing lengths.
   const state = JSON.parse(globalThis.__fakeBlob.get('state/media-sync.json'));
-  state.lengthScan = Date.now() - 25 * 3600e3;
+  state.lengthCheck = Date.now() - 25 * 3600e3;
   globalThis.__fakeBlob.set('state/media-sync.json', JSON.stringify(state));
   const r = await M.syncAll({ deadline: Date.now() + 120_000 });
   assert.ok(r.lengths >= 1);
   const c = (await E.lookupRefs([`yt:${V7}`]))[`yt:${V7}`];
   assert.equal(c.yt.dur, 1500);
   assert.equal(c.sp.dur, 1600);
+  assert.equal((await E.lookupRefs([`yt:${V8}`]))[`yt:${V8}`].yt.dur, 1100);
   const again = await M.syncAll({ deadline: Date.now() + 60_000 });
   assert.equal(again.lengths, undefined, 'nothing left to look up');
 });

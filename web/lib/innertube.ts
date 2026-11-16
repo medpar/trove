@@ -443,12 +443,18 @@ export class InnerTube {
     return parseDateLabel(label);
   }
 
-  /** A video's title, length and channel (no sign-in needed; works even when YouTube won't stream it here). */
+  /**
+   * A video's title, length and channel, no sign-in needed. YouTube often refuses player requests from
+   * servers ("confirm you're not a bot"), so a search for the id, which lists the video first, backs it up.
+   */
   async videoInfo(videoId: string): Promise<{ id: string; title: string; dur: number | null; channel: string | null; channelId: string | null } | null> {
-    const d = (await this.api('player', { videoId }))?.videoDetails;
-    if (!d?.videoId) return null;
-    const dur = Number(d.lengthSeconds);
-    return { id: d.videoId, title: d.title || '', dur: dur > 0 ? dur : null, channel: d.author || null, channelId: d.channelId || null };
+    try {
+      const d = (await this.api('player', { videoId }))?.videoDetails;
+      const dur = Number(d?.lengthSeconds);
+      if (d?.videoId === videoId && dur > 0) return { id: videoId, title: d.title || '', dur, channel: d.author || null, channelId: d.channelId || null };
+    } catch { /* try the search */ }
+    const hit = (await this.search(videoId)).find((v) => v.id === videoId);
+    return hit ? { id: videoId, title: hit.title, dur: hit.dur || null, channel: hit.channel || null, channelId: hit.channelId || null } : null;
   }
 
   async search(query: string): Promise<YtVideo[]> {
