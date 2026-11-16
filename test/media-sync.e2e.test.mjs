@@ -187,6 +187,7 @@ test("the twin search prefers the show's own channel, and finds videos in shows 
   assert.equal(r.paired, 2);
   const f = await E.lookupRefs([`sp:${E6}`, `yt:${V6}`, `yt:${V6RE}`, `yt:${V5}`, `sp:${E5}`]);
   assert.equal(f[`sp:${E6}`].yt.id, V6, 'the official upload, not the re-upload');
+  assert.equal(f[`sp:${E6}`].yt.dur, 1730, 'its length comes along, to map positions across');
   assert.equal(f[`yt:${V6RE}`], null);
   assert.equal(f[`yt:${V5}`].id, f[`sp:${E5}`].id, 'found in the Spotify show named like its channel');
   assert.equal(f[`yt:${V5}`].resume.p, 'yt');

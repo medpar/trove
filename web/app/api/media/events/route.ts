@@ -15,7 +15,8 @@ function clean(e: any): EpisodeEvent | null {
   const ranges = Array.isArray(e.ranges) ? e.ranges.filter((r: any) => Array.isArray(r) && r.length === 2 && r.every((x: any) => typeof x === 'number' && Number.isFinite(x) && x >= 0)).slice(0, 200) : undefined;
   const extDur = e.ext && num(e.ext.dur);
   const ext = e.ext && typeof e.ext === 'object' ? { pos: Math.max(0, num(e.ext.pos) ?? 0), done: e.ext.done === true, dur: extDur && extDur > 0 ? extDur : undefined } : undefined;
-  const twin = e.twin && P.has(e.twin.p) && /^[\w-]{11,22}$/.test(e.twin.id || '') ? { p: e.twin.p, id: e.twin.id, by: str(e.twin.by, 30) || 'client', score: num(e.twin.score) } : null;
+  const twinDur = e.twin && num(e.twin.dur);
+  const twin = e.twin && P.has(e.twin.p) && /^[\w-]{11,22}$/.test(e.twin.id || '') ? { p: e.twin.p, id: e.twin.id, by: str(e.twin.by, 30) || 'client', score: num(e.twin.score), dur: twinDur && twinDur > 0 ? twinDur : undefined, title: str(e.twin.title, 300) } : null;
   const at = num(e.at);
   const dur = num(e.dur);
   const since = num(e.since);

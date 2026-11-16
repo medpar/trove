@@ -241,9 +241,9 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
       const own = hits.filter((h) => sameName(h.channel, card.show));
       const m = (own.length ? pick(own, 0.7) : null) || pick(hits);
       if (m) {
-        const id = (m.c as YtVideo).id;
-        out.push({ p: 'sp', id: card.sp.id, twin: { p: 'yt', id, by: 'search', score: m.score }, at: Date.now() });
-        taken.add(`yt:${id}`);
+        const v = m.c as YtVideo;
+        out.push({ p: 'sp', id: card.sp.id, twin: { p: 'yt', id: v.id, by: 'search', score: m.score, dur: v.dur || undefined, title: v.title }, at: Date.now() });
+        taken.add(`yt:${v.id}`);
       }
     } else if (card.yt && !card.sp && card.show) {
       const shows = (st.spotify?.heard || []).filter((h) => sameName(h.title, card.show));
@@ -256,9 +256,9 @@ async function findTwins(cards: Card[], st: SyncState, { budget = 6, spDc }: { b
         }
         const m = sure(bestMatch({ title: card.title, dur: card.yt.dur }, eps.map((e) => ({ ...e, date: e.released }))), 0.7);
         if (m) {
-          const id = (m.c as SpEpisode).id;
-          out.push({ p: 'yt', id: card.yt.id, twin: { p: 'sp', id, by: 'search', score: m.score }, at: Date.now() });
-          taken.add(`sp:${id}`);
+          const ep = m.c as SpEpisode;
+          out.push({ p: 'yt', id: card.yt.id, twin: { p: 'sp', id: ep.id, by: 'search', score: m.score, dur: ep.dur || undefined, title: ep.title }, at: Date.now() });
+          taken.add(`sp:${ep.id}`);
           break;
         }
       }

@@ -411,7 +411,7 @@ export async function showPlaylists(id: string) {
 
 // ---------- index for events ----------
 
-type IndexEntry = { show: string; series: string | null; twin: { p: P; id: string; by: string } | null };
+type IndexEntry = { show: string; series: string | null; twin: { p: P; id: string; by: string; dur?: number; title?: string } | null };
 let indexCache: { at: number; map: Map<string, IndexEntry> } | null = null;
 
 async function catalogIndex() {
@@ -421,8 +421,9 @@ async function catalogIndex() {
     const c = await readCatalog(show.id);
     if (!c) continue;
     for (const r of rowsOf(show, c)) {
-      if (r.sp) map.set(`sp:${r.sp.id}`, { show: show.title, series: r.series, twin: r.yt ? { p: 'yt', id: r.yt.id, by: r.pairedBy || 'title' } : null });
-      if (r.yt) map.set(`yt:${r.yt.id}`, { show: show.title, series: r.series, twin: r.sp ? { p: 'sp', id: r.sp.id, by: r.pairedBy || 'title' } : null });
+      const copy = (p: P, x: { id: string; dur?: number | null; title?: string }) => ({ p, id: x.id, by: r.pairedBy || 'title', dur: x.dur || undefined, title: x.title || undefined });
+      if (r.sp) map.set(`sp:${r.sp.id}`, { show: show.title, series: r.series, twin: r.yt ? copy('yt', r.yt) : null });
+      if (r.yt) map.set(`yt:${r.yt.id}`, { show: show.title, series: r.series, twin: r.sp ? copy('sp', r.sp) : null });
     }
   }
   indexCache = { at: Date.now(), map };

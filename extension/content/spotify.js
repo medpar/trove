@@ -96,13 +96,18 @@
 
   // ---------- marks ----------
 
+  // Links that name an episode: not "Show all" (/episode/<id>/more-like-this), not the language picker,
+  // and not links back to the episode whose page this is (its title isn't a link).
+  const titleLink = (href) => /\/episode\/([A-Za-z0-9]{22})\/?(?:[?#]|$)/.exec(href || '')?.[1] || null;
+
   function episodeLinks() {
     const out = [];
+    const here = epId(location.pathname);
     for (const a of document.querySelectorAll('a[href*="/episode/"]')) {
-      if (a.closest('[data-testid="now-playing-widget"], footer, [data-testid="context-item-info-title"]')) continue;
+      if (a.closest('[data-testid="now-playing-widget"], footer, nav, [role="dialog"], [data-testid="context-item-info-title"]')) continue;
       if (!a.textContent.trim() || a.querySelector('img')) continue;
-      const id = epId(a.getAttribute('href'));
-      if (id) out.push({ a, id });
+      const id = titleLink(a.getAttribute('href'));
+      if (id && id !== here) out.push({ a, id });
     }
     return out;
   }

@@ -48,7 +48,8 @@ export type EpisodeEvent = {
   /** Server sync bookkeeping: what to remember as seen once this event is stored. */
   mark?: { side: 'spotify' | 'youtube'; id: string; sig: string | number };
   /** The same episode on the other platform, when the sender knows it (catalog match, manual link). */
-  twin?: { p: P; id: string; by?: string; score?: number } | null;
+  /** The same episode on the other platform; its length and title when known (to map positions across). */
+  twin?: { p: P; id: string; by?: string; score?: number; dur?: number; title?: string } | null;
   /** Show this episode belongs to in Trove (followed shows), and its series. */
   troveShow?: string;
   series?: string | null;
@@ -418,8 +419,9 @@ export async function applyEvents(events: EpisodeEvent[]): Promise<Card[]> {
       const before = rec && group.length === 1 ? JSON.stringify(rec) : null;
       let next: Rec = rec ? { ...rec } : { v: 1 };
       for (const ev of evs) next = applyEvent(next, ev) as Rec;
+      if (useTwin && twin && next[twin.p]?.id === twin.id && !next[twin.p]!.dur && twin.dur && twin.dur > 0) next[twin.p] = { ...next[twin.p]!, dur: twin.dur };
       if (useTwin && twin && !next[twin.p]) {
-        next[twin.p] = { id: twin.id };
+        next[twin.p] = { id: twin.id, ...(twin.dur && twin.dur > 0 ? { dur: twin.dur } : {}), ...(twin.title ? { title: twin.title } : {}) };
         next.linked = { by: twin.by || 'match', score: twin.score, at: Date.now() };
       }
       if (head.troveShow && next.show !== head.troveShow) next.show = head.troveShow;

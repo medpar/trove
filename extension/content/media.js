@@ -144,7 +144,8 @@
   const NAME = { yt: 'YouTube', sp: 'Spotify' };
 
   /** What to show for a card on a page of platform `here` ('yt' | 'sp'). */
-  W.describe = (lib, card, here) => {
+  /** Badge/banner text for a card on a `here` page; `hereDur` is the length of what's on screen (when Trove lacks it). */
+  W.describe = (lib, card, here, hereDur) => {
     if (!card || card.status === 'new') return null;
     const verb = here === 'sp' ? 'Played' : 'Watched';
     if (card.status === 'finished') {
@@ -158,7 +159,7 @@
     let resume = null;
     if (r) {
       const mine = card[here];
-      const m = r.p === here ? { pos: r.pos, exact: true } : lib.mapPosition(r.pos, r.dur || card[r.p]?.dur, mine?.dur);
+      const m = r.p === here ? { pos: r.pos, exact: true } : lib.mapPosition(r.pos, r.dur || card[r.p]?.dur, mine?.dur || hereDur);
       resume = { pos: m.pos, exact: m.exact, from: r.p };
       at = `${m.exact ? '' : '≈'}${lib.clock(m.pos)}${r.p !== here ? ` on ${NAME[r.p]}` : ''}`;
     }

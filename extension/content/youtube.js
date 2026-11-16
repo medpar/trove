@@ -12,6 +12,8 @@
 
   const idFrom = (href) => /[?&]v=([\w-]{11})/.exec(href || '')?.[1] || null;
   const isAd = () => !!document.querySelector('#movie_player.ad-showing, #movie_player.ad-interrupting');
+  // The video's own length: while an ad plays, the player reports the ad's.
+  const length = () => (video && !isAd() && Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null);
   const flexy = () => document.querySelector('ytd-watch-flexy');
 
   /** The video in the main player (also while it plays in the miniplayer). */
@@ -70,6 +72,9 @@
   const onLoaded = () => {
     if (session) session.armed = true;
   };
+  // An ad ending changes what the player reports as the length: map the resume point again.
+  let redraw = null;
+  const onLength = () => redraw?.();
 
   function bind() {
     const v = document.querySelector('#movie_player video.html5-main-video, video.html5-main-video');
@@ -77,6 +82,7 @@
     if (video) {
       video.removeEventListener('timeupdate', onTime);
       video.removeEventListener('loadedmetadata', onLoaded);
+      video.removeEventListener('durationchange', onLength);
       for (const e of ['pause', 'ended']) video.removeEventListener(e, onPause);
       for (const e of ['seeking', 'seeked', 'play', 'ratechange']) video.removeEventListener(e, onSeek);
     }
@@ -84,6 +90,7 @@
     if (!video) return;
     video.addEventListener('timeupdate', onTime);
     video.addEventListener('loadedmetadata', onLoaded);
+    video.addEventListener('durationchange', onLength);
     for (const e of ['pause', 'ended']) video.addEventListener(e, onPause);
     for (const e of ['seeking', 'seeked', 'play', 'ratechange']) video.addEventListener(e, onSeek);
   }
@@ -139,7 +146,8 @@
     const matched = unknown.length ? await W.match(unknown) : {};
     for (const { a, id } of list) {
       const card = cards[`yt:${id}`] || matched[`yt:${id}`];
-      W.paintThumb(a, W.describe(lib, card, 'yt'), { dim: W.settings.dim });
+      const len = card?.resume && card.resume.p !== 'yt' && !card.yt?.dur ? titleAndLength(a).dur : null;
+      W.paintThumb(a, W.describe(lib, card, 'yt', len), { dim: W.settings.dim });
     }
   }
 
@@ -159,10 +167,10 @@
       card = (await W.ask({ t: 'card', ref: `yt:${id}` }))?.card || null;
     }
     if (!card) {
-      const known = (await W.match([{ key: `yt:${id}`, p: 'yt', id, title: meta(id).title || '', dur: Number.isFinite(video?.duration) ? video.duration : null }]))[`yt:${id}`];
+      const known = (await W.match([{ key: `yt:${id}`, p: 'yt', id, title: meta(id).title || '', dur: length() }]))[`yt:${id}`];
       card = known || null;
     }
-    const d = W.describe(lib, card, 'yt');
+    const d = W.describe(lib, card, 'yt', length());
     const parent = title.parentElement;
     const existing = parent.querySelector(':scope > .trove-banner');
     if (!d) return existing?.remove();
@@ -197,7 +205,7 @@
     W.css();
     bind();
     startOrSwitch();
-    W.watchDom(() => {
+    redraw = W.watchDom(() => {
       renderThumbs();
       renderBanner();
     });
