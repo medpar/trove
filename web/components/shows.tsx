@@ -23,6 +23,7 @@ export type MediaCard = {
   doneOn: string | null;
   resume: { p: P; pos: number; dur: number | null; at: number; src: string } | null;
   last: { p: P; at: number } | null;
+  seen?: P | null;
   updated: string;
   notionUrl: string;
 };
@@ -73,6 +74,8 @@ function statusLine(card: MediaCard | null) {
     return `Finished${on}${card.finishedAt ? ` · ${timeAgo(new Date(card.finishedAt).toISOString())}` : ''}`;
   }
   const r = card.resume;
+  // Seen on a platform that kept no position (YouTube's history does that for some videos).
+  if (card.seen && !r && card.pct < 0.02) return `Seen on ${NAME[card.seen]}${card.last ? ` · ${timeAgo(new Date(card.last.at).toISOString())}` : ''}`;
   return `${Math.round(card.pct * 100)}%${r ? ` · at ${clock(r.pos)}${r.dur ? ` of ${clock(r.dur)}` : ''} on ${NAME[r.p]} · ${timeAgo(new Date(r.at).toISOString())}` : ''}`;
 }
 

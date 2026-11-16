@@ -153,6 +153,11 @@
       const when = card.finishedAt ? new Date(card.finishedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: new Date(card.finishedAt).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) : '';
       return { kind: 'done', label: `✓ ${verb}${on}`, pct: 1, title: `Trove: finished${on}${when ? ` · ${when}` : ''}`, resume: null };
     }
+    // Seen on a platform that kept no position (YouTube's history does that for some videos): no % to show.
+    if (card.seen && !card.resume && (card.pct || 0) < 0.02) {
+      const on = card.seen !== here ? ` on ${NAME[card.seen]}` : '';
+      return { kind: 'part', label: `◐ Seen${on}`, pct: 0, title: `Trove: seen${on}, position not saved`, resume: null };
+    }
     const pct = Math.max(1, Math.round((card.pct || 0) * 100));
     const r = card.resume;
     let at = '';

@@ -218,3 +218,44 @@ test('a YouTube channel and a podcast are matched by name, not by filler words',
   assert.ok(!sameName('', 'Lex Fridman Podcast'));
   assert.ok(!sameName(null, undefined));
 });
+
+test("YouTube's 'seen, no position' marks a video without inventing a position, and never hides a real one", () => {
+  const T = 1_800_000_000_000;
+  // Seen only: started, no %, no resume point.
+  let r = applyEvent(null, { p: 'yt', id: 'aaaaaaaaaaa', at: T, dur: 3600, ext: { pos: 0, done: false, seen: true }, src: 'youtube' });
+  let s = summarize(r);
+  assert.equal(s.status, 'started');
+  assert.equal(s.pct, 0);
+  assert.equal(s.resume, null);
+  assert.equal(s.seen, 'yt');
+  // A real position from YouTube later takes over.
+  r = applyEvent(r, { p: 'yt', id: 'aaaaaaaaaaa', at: T + 1000, dur: 3600, ext: { pos: 1332, done: false }, src: 'youtube' });
+  s = summarize(r);
+  assert.equal(s.seen, null);
+  assert.equal(s.resume.pos, 1332);
+  // The extension saw you watch half; YouTube later only says "seen": the extension's position stays.
+  let q = applyEvent(null, { p: 'yt', id: 'bbbbbbbbbbb', at: T, dur: 3000, ranges: [[0, 1500]], pos: 1500, src: 'extension' });
+  q = applyEvent(q, { p: 'yt', id: 'bbbbbbbbbbb', at: T + 5000, ext: { pos: 0, done: false, seen: true }, src: 'youtube' });
+  s = summarize(q);
+  assert.equal(s.status, 'started');
+  assert.equal(s.resume.pos, 1500);
+  assert.equal(s.seen, null);
+});
+
+test('a finished video stays finished when you open it again or start rewatching it', () => {
+  const T = 1_800_000_000_000;
+  // Finished by YouTube's own report; a day later you rewatch and YouTube says 37%.
+  let g = applyEvent(null, { p: 'yt', id: 'ddddddddddd', at: T, dur: 1000, ext: { pos: 1000, done: true }, src: 'youtube' });
+  assert.equal(summarize(g).status, 'finished');
+  g = applyEvent(g, { p: 'yt', id: 'ddddddddddd', at: T + 86_400_000, dur: 1000, ext: { pos: 370, done: false }, src: 'youtube' });
+  assert.equal(summarize(g).status, 'finished', 'rewatching keeps it finished');
+  assert.equal(summarize(g).resume.pos, 370, 'and remembers where the rewatch is');
+  // Finished in the browser; opening it again only gets a "seen" from YouTube, and a few seconds played.
+  let f = applyEvent(null, { p: 'yt', id: 'ccccccccccc', at: T, dur: 600, ranges: [[0, 590]], pos: 590, src: 'extension' });
+  assert.equal(summarize(f).status, 'finished');
+  f = applyEvent(f, { p: 'yt', id: 'ccccccccccc', at: T + 9000, ext: { pos: 0, done: false, seen: true }, src: 'youtube' });
+  f = applyEvent(f, { p: 'yt', id: 'ccccccccccc', at: T + 9999, ranges: [[0, 12]], pos: 12, since: T + 9990, src: 'extension' });
+  assert.equal(summarize(f).status, 'finished');
+  // Only "Not finished" by hand undoes it.
+  assert.equal(summarize(markManual(f, false, T + 20000)).status, 'new');
+});

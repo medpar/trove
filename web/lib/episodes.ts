@@ -10,7 +10,7 @@ import { readState, writeState } from './state';
 import { notion, rt } from './store';
 
 export type P = 'yt' | 'sp';
-export type Ext = { pos?: number; dur?: number | null; done?: boolean; doneAt?: number | null; at?: number; src?: string };
+export type Ext = { pos?: number; dur?: number | null; done?: boolean; doneAt?: number | null; at?: number; src?: string; seen?: boolean };
 export type Copy = { id: string; title?: string; show?: string; showId?: string; channel?: string; channelId?: string; image?: string; released?: string; dur?: number; ranges?: number[][]; pos?: number; at?: number; ext?: Ext };
 export type Rec = {
   v?: number;
@@ -41,7 +41,7 @@ export type EpisodeEvent = {
   dur?: number;
   ranges?: number[][];
   pos?: number;
-  ext?: { pos?: number; done?: boolean; dur?: number };
+  ext?: { pos?: number; done?: boolean; dur?: number; seen?: boolean };
   src?: string;
   /** When the player that sends these ranges started (they are everything it played since). */
   since?: number;
@@ -70,6 +70,8 @@ export type Card = {
   doneOn: string | null;
   resume: { p: P; pos: number; dur: number | null; at: number; src: string } | null;
   last: { p: P; at: number } | null;
+  /** Seen on this platform with no position (YouTube's history keeps none for some videos). */
+  seen: P | null;
   updated: string;
   notionUrl: string;
 };
@@ -257,6 +259,7 @@ export function toCard(page: any, rec = recordOf(page)): Card {
     doneOn: s.doneOn,
     resume: s.resume as Card['resume'],
     last: s.last as Card['last'],
+    seen: (s.seen as P | null) || null,
     updated: page.last_edited_time,
     notionUrl: page.url,
   };

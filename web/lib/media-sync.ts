@@ -17,7 +17,7 @@ export type YouTubeCreds = { jar: CookieJar; savedAt: number };
 type Side = { at?: number; ok?: boolean; error?: string | null; auth?: boolean; events?: number };
 type SyncState = {
   spotify?: Side & { seen?: Record<string, string>; shows?: Record<string, number>; libraryAt?: number; hashes?: Record<string, string>; heard?: { id: string; title: string }[] };
-  youtube?: Side & { seen?: Record<string, number> };
+  youtube?: Side & { seen?: Record<string, number>; placeholderFix?: number };
   /** Episodes heard on only one platform, still to be looked up on the other (a first import brings hundreds). */
   twins?: string[];
   /** Which version of the twin search last looked up everything already in Notion. */
@@ -215,9 +215,39 @@ async function syncYouTube(creds: YouTubeCreds, st: NonNullable<SyncState['youtu
   return events;
 }
 
+/** YouTube's history shows exactly 10% for a video it keeps no position for ("watched, position not saved"). */
+const PLACEHOLDER = 10;
+/** Below this length such a video counts as watched (songs, clips); longer ones only as seen. Mario's call. */
+const SHORT_VIDEO = 20 * 60;
+
 function youtubeEvent(v: YtVideo, at: number): EpisodeEvent {
   const pct = Math.max(0, Math.min(100, v.pct || 0));
-  return { p: 'yt', id: v.id, title: v.title, channel: v.channel, channelId: v.channelId, dur: v.dur || undefined, ext: { pos: Math.round((pct / 100) * (v.dur || 0)), done: pct >= 95, dur: v.dur || undefined }, at, src: 'youtube' };
+  const dur = v.dur || undefined;
+  const ext =
+    v.pct === PLACEHOLDER
+      ? dur && dur < SHORT_VIDEO
+        ? { pos: dur, done: true, dur }
+        : { pos: 0, done: false, seen: true, dur }
+      : { pos: Math.round((pct / 100) * (v.dur || 0)), done: pct >= 95, dur };
+  return { p: 'yt', id: v.id, title: v.title, channel: v.channel, channelId: v.channelId, dur, ext, at, src: 'youtube' };
+}
+
+/**
+ * One-time: videos imported before Trove knew the 10% placeholder were stored at 10% with a made-up
+ * position. Re-read them under the same rule, keeping when each was watched.
+ */
+async function placeholderFixes(st: NonNullable<SyncState['youtube']>) {
+  const ids = Object.entries(st.seen || {}).filter(([, pct]) => pct === PLACEHOLDER).map(([id]) => id);
+  const events: EpisodeEvent[] = [];
+  for (let i = 0; i < ids.length; i += 25) {
+    const found = await lookupRefs(ids.slice(i, i + 25).map((id) => `yt:${id}`));
+    for (const id of ids.slice(i, i + 25)) {
+      const c = found[`yt:${id}`];
+      const at = c?.resume?.p === 'yt' && c.resume.src === 'youtube' ? c.resume.at : c?.last?.p === 'yt' ? c.last.at : null;
+      if (c?.yt && at) events.push(youtubeEvent({ id, title: c.yt.title || c.title, dur: c.yt.dur, pct: PLACEHOLDER } as YtVideo, at));
+    }
+  }
+  return events;
 }
 
 /**
@@ -403,6 +433,21 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
   // Several plays of one episode land on one card, so count what was left unsaved by events.
   result.updated = cards.length;
   if (applied < events.length && !result.error) result.left = events.length - applied;
+
+  if (ytc && (!only || only === 'youtube') && !st.youtube?.placeholderFix && !result.error && Date.now() < deadline - 60_000) {
+    try {
+      const fixes = await placeholderFixes((st.youtube ||= {}));
+      let done = 0;
+      for (let i = 0; i < fixes.length && Date.now() < deadline - 20_000; i += 25) {
+        await applyEvents(fixes.slice(i, i + 25));
+        done = i + Math.min(25, fixes.length - i);
+      }
+      if (done === fixes.length) st.youtube.placeholderFix = 1;
+      result.placeholders = done;
+    } catch (e: any) {
+      result.placeholdersError = e.message;
+    }
+  }
 
   // Look for the other platform's copy of what you heard on only one: this run's episodes first, then
   // the ones earlier runs had no time for. A few lookups per run, so a big first import catches up hourly.

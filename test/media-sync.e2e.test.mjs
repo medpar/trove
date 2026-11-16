@@ -27,6 +27,10 @@ const E7 = '7'.repeat(22);
 const V7 = 'ggggggggggg';
 const E8 = '8'.repeat(22);
 const V8 = 'hhhhhhhhhhh';
+const V11 = 'kkkkkkkkkkk';
+const V12 = 'lllllllllll';
+const V13 = 'mmmmmmmmmmm';
+const V14 = 'nnnnnnnnnnn';
 const world = { anonymous: false, played: { [E1]: [900_000, 'IN_PROGRESS'], [E2]: [0, 'COMPLETED'] }, history: { [V1]: 37, [V2]: 100 }, rotate: 'rotated-1' };
 const seen = [];
 
@@ -220,6 +224,41 @@ test('a copy paired without its length gets it on the next sync, so positions ma
   assert.equal((await E.lookupRefs([`yt:${V8}`]))[`yt:${V8}`].yt.dur, 1100);
   const again = await M.syncAll({ deadline: Date.now() + 60_000 });
   assert.equal(again.lengths, undefined, 'nothing left to look up');
+});
+
+test("YouTube's 10% placeholder: short videos count as watched, longer ones as seen without a position", async () => {
+  world.extraHistory.push([V11, 'A song', '3:30', 10], [V12, 'A long talk', '45:00', 10]);
+  const r = await M.syncAll({ deadline: Date.now() + 60_000 });
+  assert.equal(r.youtube.events, 2);
+  const f = await E.lookupRefs([`yt:${V11}`, `yt:${V12}`]);
+  assert.equal(f[`yt:${V11}`].status, 'finished');
+  assert.equal(f[`yt:${V12}`].status, 'started');
+  assert.equal(f[`yt:${V12}`].seen, 'yt');
+  assert.equal(f[`yt:${V12}`].resume, null, 'no made-up position');
+  assert.equal(f[`yt:${V12}`].pct, 0);
+});
+
+test('videos imported before that rule are re-read once, keeping when they were watched', async () => {
+  // As the old import stored them: 10% and a position at 10%.
+  const when = Date.now() - 5 * 86_400_000;
+  await E.applyEvents([
+    { p: 'yt', id: V13, at: when, title: 'Old song', dur: 240, ext: { pos: 24, done: false }, src: 'youtube' },
+    { p: 'yt', id: V14, at: when, title: 'Old podcast', dur: 3000, ext: { pos: 300, done: false }, src: 'youtube' },
+  ]);
+  assert.equal((await E.lookupRefs([`yt:${V14}`]))[`yt:${V14}`].resume.pos, 300);
+  const state = JSON.parse(globalThis.__fakeBlob.get('state/media-sync.json'));
+  Object.assign(state.youtube.seen, { [V13]: 10, [V14]: 10 });
+  delete state.youtube.placeholderFix;
+  globalThis.__fakeBlob.set('state/media-sync.json', JSON.stringify(state));
+  const r = await M.syncAll({ deadline: Date.now() + 120_000 });
+  assert.ok(r.placeholders >= 2);
+  const f = await E.lookupRefs([`yt:${V13}`, `yt:${V14}`]);
+  assert.equal(f[`yt:${V13}`].status, 'finished');
+  assert.equal(f[`yt:${V14}`].seen, 'yt');
+  assert.equal(f[`yt:${V14}`].resume, null);
+  assert.equal(f[`yt:${V14}`].last.at, when, 'still dated when it was watched');
+  const again = await M.syncAll({ deadline: Date.now() + 120_000 });
+  assert.equal(again.placeholders, undefined, 'only once');
 });
 
 test('an expired Spotify sign-in is reported, and YouTube keeps syncing', async () => {
