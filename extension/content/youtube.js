@@ -137,6 +137,23 @@
     return { title, dur: len ? lib.parseClock(len) : null };
   }
 
+  // YouTube's own red "watched" bar on a thumbnail (the markup YouTube's renderer writes; newer and older
+  // variants). It is YouTube's record from before Trove, or of plays Trove didn't see.
+  const YT_BAR = '.ytThumbnailOverlayProgressBarHostWatchedProgressBarSegment, .ytwThumbnailOverlayResumePlaybackRendererThumbnailOverlayResumePlaybackProgress, ytd-thumbnail-overlay-resume-playback-renderer #progress';
+
+  /** A mark from YouTube's record when Trove has none, read by the same rules as the history import. */
+  function fromYouTube(a) {
+    const bar = a.querySelector(YT_BAR) || (a.closest(RENDERERS) || a.parentElement)?.querySelector(YT_BAR);
+    const pct = bar ? parseFloat(bar.style.width) : NaN;
+    if (!Number.isFinite(pct) || pct <= 0) return null;
+    // Exactly 10% is YouTube's "watched, position not saved": under 20 minutes counts as watched, longer as seen.
+    const dur = titleAndLength(a).dur;
+    const note = 'from YouTube’s record, not in Trove yet';
+    if (pct >= 95 || (pct === 10 && dur && dur < 20 * 60)) return { kind: 'done', label: '✓ Watched', pct: 1, title: `Watched (${note})`, resume: null };
+    if (pct === 10) return { kind: 'part', label: '◐ Seen', pct: 0, title: `Seen on YouTube, position not saved (${note})`, resume: null };
+    return { kind: 'part', label: `◐ ${Math.round(pct)}%`, pct: pct / 100, title: `${Math.round(pct)}% watched (${note})`, resume: null };
+  }
+
   async function renderThumbs() {
     if (!lib || !W.settings?.badges) return;
     const list = thumbs();
@@ -147,7 +164,7 @@
     for (const { a, id } of list) {
       const card = cards[`yt:${id}`] || matched[`yt:${id}`];
       const len = card?.resume && card.resume.p !== 'yt' && !card.yt?.dur ? titleAndLength(a).dur : null;
-      W.paintThumb(a, W.describe(lib, card, 'yt', len), { dim: W.settings.dim });
+      W.paintThumb(a, W.describe(lib, card, 'yt', len) || fromYouTube(a), { dim: W.settings.dim });
     }
   }
 
