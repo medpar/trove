@@ -28,6 +28,8 @@ nonisolated struct EpisodeCard: Codable, Hashable, Sendable, Identifiable {
         var dur: Double?
         /// Milliseconds since 1970.
         var at: Double
+        /// `at` is only "by then": Trove found it already played (an import) and can't know when.
+        var before: Bool?
     }
 
     var id: String
@@ -41,13 +43,17 @@ nonisolated struct EpisodeCard: Codable, Hashable, Sendable, Identifiable {
     var status: Status
     var pct: Double
     var finishedAt: Double?
+    /// The finish date is only "by then" (already finished when Trove first saw it).
+    var finishedBefore: Bool = false
     /// "yt", "sp", "both" or "manual".
     var doneOn: String?
     var resume: Resume?
+    /// Seen on this platform with no position kept (YouTube's history does that for some videos).
+    var seen: MediaPlatform?
     var notionUrl: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, title, show, series, image, released, yt, sp, status, pct, finishedAt, doneOn, resume, notionUrl
+        case id, title, show, series, image, released, yt, sp, status, pct, finishedAt, finishedBefore, doneOn, resume, seen, notionUrl
     }
 
     subscript(_ p: MediaPlatform) -> EpisodeCopy? { p == .yt ? yt : sp }
@@ -69,8 +75,10 @@ nonisolated struct EpisodeCard: Codable, Hashable, Sendable, Identifiable {
         c.status = finished ? .finished : .new
         c.pct = finished ? 1 : 0
         c.finishedAt = finished ? Date.now.timeIntervalSince1970 * 1000 : nil
+        c.finishedBefore = false
         c.doneOn = finished ? "manual" : nil
         c.resume = nil
+        c.seen = nil
         return c
     }
 }
@@ -90,8 +98,10 @@ nonisolated extension EpisodeCard {
         status = (try? c.decodeIfPresent(Status.self, forKey: .status)) ?? .new
         pct = c.double(.pct) ?? 0
         finishedAt = c.double(.finishedAt)
+        finishedBefore = (try? c.decodeIfPresent(Bool.self, forKey: .finishedBefore)) ?? false
         doneOn = c.optionalString(.doneOn)
         resume = try? c.decodeIfPresent(Resume.self, forKey: .resume)
+        seen = c.optionalString(.seen).flatMap(MediaPlatform.init(rawValue:))
         notionUrl = c.optionalString(.notionUrl)
     }
 }
@@ -313,22 +323,29 @@ nonisolated enum EpisodeMath {
         return "\(max(1, minutes)) min"
     }
 
-    /// "42% · at 1:04:28 of 2:31:45 on Spotify · 2h"
+    /// "2h", or "before 15 Nov" when Trove only knows it had happened by then (found already played).
+    static func when(_ ms: Double, before: Bool) -> String {
+        let date = Date(timeIntervalSince1970: ms / 1000)
+        return before ? "before \(date.formatted(.dateTime.day().month(.abbreviated)))" : Fmt.ago(date)
+    }
+
+    /// "42% · at 1:04:28 of 2:31:45 on Spotify · 2h", or "Seen on YouTube" when it kept no position.
     static func progressLine(_ card: EpisodeCard) -> String {
+        if let seen = card.seen, card.resume == nil, card.pct < 0.02 { return "Seen on \(seen.name)" }
         var s = "\(Int((card.pct * 100).rounded()))%"
         if let r = card.resume {
             s += " · at \(clock(r.pos))"
             if let d = r.dur, d > 0 { s += " of \(clock(d))" }
-            s += " on \(r.p.name) · \(Fmt.ago(Date(timeIntervalSince1970: r.at / 1000)))"
+            s += " on \(r.p.name) · \(when(r.at, before: r.before == true))"
         }
         return s
     }
 
-    /// "Finished on Spotify · 3d"
+    /// "Finished on Spotify · 3d", or "· before 15 Nov" when it was already finished when Trove first looked.
     static func finishedLine(_ card: EpisodeCard) -> String {
         var s = "Finished"
         if let on = card.doneOn.flatMap(MediaPlatform.init(rawValue:)) { s += " on \(on.name)" }
-        if let d = card.finishedDate { s += " · \(Fmt.ago(d))" }
+        if let at = card.finishedAt { s += " · \(when(at, before: card.finishedBefore))" }
         return s
     }
 }
