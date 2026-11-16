@@ -23,6 +23,10 @@ type SyncState = {
   /** Which version of the twin search last looked up everything already in Notion. */
   twinSeed?: number;
   twinsSeeded?: number;
+  /** Copies whose length Trove doesn't know yet (paired by a search, by hand, or by an older catalog). */
+  lengths?: string[];
+  /** When everything in Notion was last checked for missing lengths (daily). */
+  lengthScan?: number;
   running?: number;
 };
 
@@ -272,6 +276,42 @@ const TWIN_SEARCH = 2;
 const refOf = (c: Card) => (c.yt ? `yt:${c.yt.id}` : `sp:${c.sp?.id}`);
 const single = (c: Card | null | undefined): c is Card => !!c && !!(c.yt || c.sp) && !(c.yt && c.sp);
 
+/**
+ * Lengths for platform copies Trove doesn't know yet, so a position maps exactly from one platform to
+ * the other (a podcast with ad reads runs longer than its video).
+ */
+export async function lengthEvents(cards: Card[], { spDc, max = 20 }: { spDc?: string | null; max?: number } = {}) {
+  const yt = new InnerTube();
+  const sp = new SpotifyWeb({ spDc });
+  const events: EpisodeEvent[] = [];
+  let looked = 0;
+  for (const card of cards) {
+    for (const p of ['yt', 'sp'] as const) {
+      const copy = card[p];
+      if (!copy || copy.dur || looked >= max) continue;
+      looked++;
+      const info = p === 'yt' ? await yt.videoInfo(copy.id).catch(() => null) : await sp.episode(copy.id).catch(() => null);
+      if (info?.dur) events.push({ p, id: copy.id, dur: info.dur, title: copy.title ? undefined : info.title || undefined, at: Date.now(), src: 'lookup' });
+    }
+  }
+  return events;
+}
+
+const missingLength = (c: Card) => [c.yt && !c.yt.dur && `yt:${c.yt.id}`, c.sp && !c.sp.dur && `sp:${c.sp.id}`].filter(Boolean) as string[];
+const LENGTH_SCAN_EVERY = 24 * 3600e3;
+
+async function missingLengthRefs() {
+  const refs: string[] = [];
+  let cursor: string | null = null;
+  for (let i = 0; i < 30; i++) {
+    const page = await listEpisodes({ cursor, limit: 100 });
+    for (const c of page.cards) refs.push(...missingLength(c));
+    if (!page.cursor) break;
+    cursor = page.cursor;
+  }
+  return refs;
+}
+
 /** Every episode heard on only one platform, most recent first (seeds the twin queue once). */
 async function unpairedRefs() {
   const refs: string[] = [];
@@ -396,6 +436,30 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
   }
   st.twins = queue.length ? queue.slice(0, 3000) : undefined;
   if (queue.length) result.toPair = queue.length;
+
+  // Lengths of copies paired without one, a few per run: this run's first.
+  let lengths = [...new Set([...cards.flatMap(missingLength), ...(st.lengths || [])])];
+  // Once a day, everything in Notion (copies linked by hand when the lookup failed, older pairs).
+  if (Date.now() - (st.lengthScan || 0) > LENGTH_SCAN_EVERY && Date.now() < deadline - 30_000) {
+    try {
+      lengths = [...new Set([...lengths, ...(await missingLengthRefs())])];
+      st.lengthScan = Date.now();
+    } catch { /* next run */ }
+  }
+  if (lengths.length && Date.now() < deadline - 15_000) {
+    const head = lengths.slice(0, 20);
+    try {
+      const found = await lookupRefs(head);
+      const cards = [...new Map(Object.values(found).filter((c): c is Card => !!c).map((c) => [c.id, c])).values()];
+      const events = (await lengthEvents(cards, { spDc: spc?.spDc, max: 20 })).filter((e) => head.includes(`${e.p}:${e.id}`));
+      if (events.length) await applyEvents(events);
+      result.lengths = events.length;
+      lengths = lengths.slice(head.length);
+    } catch (e: any) {
+      result.lengthsError = e.message;
+    }
+  }
+  st.lengths = lengths.length ? lengths.slice(0, 3000) : undefined;
   if (st.spotify?.seen) st.spotify.seen = trim(st.spotify.seen);
   if (st.youtube?.seen) st.youtube.seen = trim(st.youtube.seen);
   if (JSON.stringify(st) !== before) await writeState(STATE, st);

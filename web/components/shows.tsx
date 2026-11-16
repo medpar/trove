@@ -263,8 +263,9 @@ function EpisodeRow({ row, act, dense }: { row: Row; act: Act; dense?: boolean }
   const toast = useToast();
   const [linking, setLinking] = useState<P | null>(null);
   const card = row.card;
-  const ytRes = row.yt ? resumeOn(card, 'yt', row.yt.dur || row.dur) : null;
-  const spRes = row.sp ? resumeOn(card, 'sp', row.sp.dur || row.dur) : null;
+  // Each platform's own length only: borrowing the other's would make a mapped time look exact.
+  const ytRes = row.yt ? resumeOn(card, 'yt', row.yt.dur || card?.yt?.dur || null) : null;
+  const spRes = row.sp ? resumeOn(card, 'sp', row.sp.dur || card?.sp?.dur || null) : null;
   const preferred: P = card?.resume?.p && row[card.resume.p] ? card.resume.p : row.sp ? 'sp' : 'yt';
 
   /** Episodes you never played have no page yet: create one first. */

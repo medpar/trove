@@ -23,6 +23,8 @@ const V5 = 'eeeeeeeeeee';
 const E6 = '6'.repeat(22);
 const V6 = 'fffffffffff';
 const V6RE = 'rrrrrrrrrrr';
+const E7 = '7'.repeat(22);
+const V7 = 'ggggggggggg';
 const world = { anonymous: false, played: { [E1]: [900_000, 'IN_PROGRESS'], [E2]: [0, 'COMPLETED'] }, history: { [V1]: 37, [V2]: 100 }, rotate: 'rotated-1' };
 const seen = [];
 
@@ -73,6 +75,10 @@ async function fakeFetch(input, init = {}) {
         : /Ep F/.test(q) ? [video(V6RE, 'Ep F: Deep Sea', '30:00', 'Random Reuploads'), video(V6, 'Ep F: Deep Sea | Test Show', '28:50')]
           : [];
     return json({ contents: { items: hits } });
+  }
+  if (url.hostname === 'www.youtube.com' && url.pathname.startsWith('/youtubei/v1/player')) {
+    const id = JSON.parse(init.body).videoId;
+    return json(id === V7 ? { playabilityStatus: { status: 'UNPLAYABLE' }, videoDetails: { videoId: V7, title: 'Ep G: Volcanoes', lengthSeconds: '1500', author: 'Test Show', channelId: 'UCxx' } } : {});
   }
   if (url.hostname === 'www.youtube.com') return json({});
   throw new Error(`unexpected fetch ${url}`);
@@ -191,6 +197,23 @@ test("the twin search prefers the show's own channel, and finds videos in shows 
   assert.equal(f[`yt:${V6RE}`], null);
   assert.equal(f[`yt:${V5}`].id, f[`sp:${E5}`].id, 'found in the Spotify show named like its channel');
   assert.equal(f[`yt:${V5}`].resume.p, 'yt');
+});
+
+test('a copy paired without its length gets it on the next sync, so positions map across', async () => {
+  // Paired by hand or by an older catalog: Trove knows the video's id but not its length.
+  await E.applyEvents([{ p: 'sp', id: E7, at: Date.now(), title: 'Ep G: Volcanoes', dur: 1600, ext: { pos: 800 }, src: 'spotify', twin: { p: 'yt', id: V7, by: 'manual' } }]);
+  assert.equal((await E.lookupRefs([`yt:${V7}`]))[`yt:${V7}`].yt.dur, null);
+  // A day after the last check for missing lengths.
+  const state = JSON.parse(globalThis.__fakeBlob.get('state/media-sync.json'));
+  state.lengthScan = Date.now() - 25 * 3600e3;
+  globalThis.__fakeBlob.set('state/media-sync.json', JSON.stringify(state));
+  const r = await M.syncAll({ deadline: Date.now() + 120_000 });
+  assert.ok(r.lengths >= 1);
+  const c = (await E.lookupRefs([`yt:${V7}`]))[`yt:${V7}`];
+  assert.equal(c.yt.dur, 1500);
+  assert.equal(c.sp.dur, 1600);
+  const again = await M.syncAll({ deadline: Date.now() + 60_000 });
+  assert.equal(again.lengths, undefined, 'nothing left to look up');
 });
 
 test('an expired Spotify sign-in is reported, and YouTube keeps syncing', async () => {
