@@ -37,6 +37,7 @@ function clean(e: any): EpisodeEvent | null {
     pos: num(e.pos),
     ext,
     src: str(e.src, 30) || 'api',
+    before: e.before === true || undefined,
     twin,
   };
 }

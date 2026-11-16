@@ -20,9 +20,10 @@ export type MediaCard = {
   status: 'new' | 'started' | 'finished';
   pct: number;
   finishedAt: number | null;
+  finishedBefore?: boolean;
   doneOn: string | null;
-  resume: { p: P; pos: number; dur: number | null; at: number; src: string } | null;
-  last: { p: P; at: number } | null;
+  resume: { p: P; pos: number; dur: number | null; at: number; src: string; before?: boolean } | null;
+  last: { p: P; at: number; before?: boolean } | null;
   seen?: P | null;
   updated: string;
   notionUrl: string;
@@ -67,16 +68,19 @@ function resumeOn(card: MediaCard | null, p: P, dur: number | null): { pos: numb
   return mapPosition(r.pos, r.dur || card?.[r.p]?.dur || null, dur);
 }
 
+/** "3 h ago", or "before 15 Nov" when Trove only knows it had happened by then (found already played). */
+const whenText = (at: number, before?: boolean) => (before ? `before ${fmtDate(new Date(at).toISOString())}` : timeAgo(new Date(at).toISOString()));
+
 function statusLine(card: MediaCard | null) {
   if (!card || card.status === 'new') return '';
   if (card.status === 'finished') {
     const on = card.doneOn && card.doneOn !== 'both' && card.doneOn !== 'manual' ? ` on ${NAME[card.doneOn as P]}` : '';
-    return `Finished${on}${card.finishedAt ? ` · ${timeAgo(new Date(card.finishedAt).toISOString())}` : ''}`;
+    return `Finished${on}${card.finishedAt ? ` · ${whenText(card.finishedAt, card.finishedBefore)}` : ''}`;
   }
   const r = card.resume;
   // Seen on a platform that kept no position (YouTube's history does that for some videos).
-  if (card.seen && !r && card.pct < 0.02) return `Seen on ${NAME[card.seen]}${card.last ? ` · ${timeAgo(new Date(card.last.at).toISOString())}` : ''}`;
-  return `${Math.round(card.pct * 100)}%${r ? ` · at ${clock(r.pos)}${r.dur ? ` of ${clock(r.dur)}` : ''} on ${NAME[r.p]} · ${timeAgo(new Date(r.at).toISOString())}` : ''}`;
+  if (card.seen && !r && card.pct < 0.02) return `Seen on ${NAME[card.seen]}${card.last ? ` · ${whenText(card.last.at, card.last.before)}` : ''}`;
+  return `${Math.round(card.pct * 100)}%${r ? ` · at ${clock(r.pos)}${r.dur ? ` of ${clock(r.dur)}` : ''} on ${NAME[r.p]} · ${whenText(r.at, r.before)}` : ''}`;
 }
 
 export function PlatformLogo({ p, size = 14 }: { p: P; size?: number }) {

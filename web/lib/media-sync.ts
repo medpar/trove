@@ -4,7 +4,7 @@
 // close the Spotify or YouTube app on the iPhone (an iOS automation), and when you open Shows.
 import 'server-only';
 import { bestMatch, sameName } from '../../extension/lib/progress.js';
-import { applyEvents, listEpisodes, lookupRefs, type Card, type EpisodeEvent } from './episodes';
+import { applyEvents, listEpisodes, lookupRefs, redateFirstImport, type Card, type EpisodeEvent } from './episodes';
 import { hasYouTubeSession, InnerTube, parseCookies, YouTubeAuthError, type CookieJar, type YtVideo } from './innertube';
 import { buildCatalog, listShows, staleShows, withCatalog } from './shows';
 import { SpotifyAuthError, SpotifyWeb, type SpEpisode } from './spotify';
@@ -16,7 +16,7 @@ export type YouTubeCreds = { jar: CookieJar; savedAt: number };
 
 type Side = { at?: number; ok?: boolean; error?: string | null; auth?: boolean; events?: number };
 type SyncState = {
-  spotify?: Side & { seen?: Record<string, string>; shows?: Record<string, number>; libraryAt?: number; hashes?: Record<string, string>; heard?: { id: string; title: string }[] };
+  spotify?: Side & { seen?: Record<string, string>; shows?: Record<string, number>; libraryAt?: number; hashes?: Record<string, string>; heard?: { id: string; title: string }[]; dateFix?: number };
   youtube?: Side & { seen?: Record<string, number>; placeholderFix?: number };
   /** Episodes heard on only one platform, still to be looked up on the other (a first import brings hundreds). */
   twins?: string[];
@@ -113,7 +113,13 @@ function spotifyEvent(e: SpEpisode, at: number): EpisodeEvent {
  * They are remembered as seen only once stored (see `mark`), so a sync cut short repeats them.
  */
 type Pending = Map<string, string | number>;
-function spotifyChanges(st: NonNullable<SyncState['spotify']>, episodes: SpEpisode[], at: (e: SpEpisode, first: boolean) => number, pendingSeen: Pending) {
+function spotifyChanges(
+  st: NonNullable<SyncState['spotify']>,
+  episodes: SpEpisode[],
+  at: (e: SpEpisode, first: boolean) => number,
+  pendingSeen: Pending,
+  before: (e: SpEpisode, first: boolean) => boolean = () => false,
+) {
   const seen = (st.seen ||= {});
   const out: EpisodeEvent[] = [];
   for (const e of episodes) {
@@ -124,21 +130,18 @@ function spotifyChanges(st: NonNullable<SyncState['spotify']>, episodes: SpEpiso
     if (known === sig) continue;
     if (first && !e.played.done && e.played.pos < 5) continue;
     pendingSeen.set(`sp:${e.id}`, sig);
-    out.push({ ...spotifyEvent(e, at(e, first)), mark: { side: 'spotify', id: e.id, sig } });
+    out.push({ ...spotifyEvent(e, at(e, first)), ...(before(e, first) ? { before: true } : {}), mark: { side: 'spotify', id: e.id, sig } });
   }
   return out;
 }
 
 /**
- * When an episode turns up already played on the first import, we don't know when you heard it.
- * Spotify's "last played" for its show is the best clue (for the one you're in the middle of);
- * otherwise a few days after it came out, never "now".
+ * An episode that turns up already played the first time Trove reads it: Spotify keeps no date for
+ * that, so it is dated "by now" and flagged as unknown, never guessed. The one you're in the middle of
+ * in a show you just played is dated by that show's "last played" instead.
  */
-const guessWhen = (e: SpEpisode, played: number, known = false) => {
-  if (!e.released) return played;
-  const r = Date.parse(e.released) + 3 * 864e5;
-  return known && !e.played?.done ? played : Math.min(played, r);
-};
+const unseenFinish = (e: SpEpisode, first: boolean) => first && !!e.played?.done;
+const firstSeen = (_e: SpEpisode, first: boolean) => first;
 
 async function syncSpotify(creds: SpotifyCreds, st: NonNullable<SyncState['spotify']>, { deep, deadline, pending }: { deep: boolean; deadline: number; pending: Pending }) {
   const sp = new SpotifyWeb({ spDc: creds.spDc, hashes: st.hashes });
@@ -164,7 +167,7 @@ async function syncSpotify(creds: SpotifyCreds, st: NonNullable<SyncState['spoti
       for (let i = 0; i < pages && Date.now() < deadline; i++) {
         const page = await sp.showEpisodes(id, i * 50, 50);
         if (i === 0) heard.set(id, { id, title: page.title });
-        events.push(...spotifyChanges(st, page.episodes, (e, first) => (first ? guessWhen(e, when(ctx.at), !!ctx.at) : when(ctx.at)), pending));
+        events.push(...spotifyChanges(st, page.episodes, (e, first) => (unseenFinish(e, first) ? Date.now() : when(ctx.at)), pending, unseenFinish));
         if (page.episodes.length < 50) break;
       }
       scanned[id] = Date.now();
@@ -181,7 +184,7 @@ async function syncSpotify(creds: SpotifyCreds, st: NonNullable<SyncState['spoti
       heard.set(show.id, { id: show.id, title: show.title });
       try {
         const page = await sp.showEpisodes(show.id, 0, deep ? 50 : 20);
-        events.push(...spotifyChanges(st, page.episodes, (e, first) => (first ? guessWhen(e, Date.now()) : when(0)), pending));
+        events.push(...spotifyChanges(st, page.episodes, (_e, first) => (first ? Date.now() : when(0)), pending, firstSeen));
       } catch { /* a removed show */ }
     }
     st.libraryAt = Date.now();
@@ -405,7 +408,7 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
     if (stale[0] && Date.now() < deadline - 90_000) {
       try {
         const c = await buildCatalog(stale[0], { spDc: spc?.spDc, deadline: deadline - 30_000 });
-        if (spc) events.push(...spotifyChanges((st.spotify ||= {}), c.sp, (e, first) => (first ? guessWhen(e, Date.now()) : Date.now()), pending));
+        if (spc) events.push(...spotifyChanges((st.spotify ||= {}), c.sp, () => Date.now(), pending, firstSeen));
         result.catalog = { show: stale[0].title, spotify: c.sp.length, youtube: c.yt.length, paired: Object.keys(c.pairs).length, error: c.error || null };
       } catch (e: any) {
         result.catalog = { show: stale[0].title, error: e.message };
@@ -433,6 +436,16 @@ async function runSync({ deep = false, only, deadline = Date.now() + 240_000 }: 
   // Several plays of one episode land on one card, so count what was left unsaved by events.
   result.updated = cards.length;
   if (applied < events.length && !result.error) result.left = events.length - applied;
+
+  // One-time: first-import Spotify plays were dated "three days after release"; date them "by first seen".
+  if (spc && !st.spotify?.dateFix && !result.error && Date.now() < deadline - 60_000) {
+    try {
+      result.redated = await redateFirstImport();
+      (st.spotify ||= {}).dateFix = 1;
+    } catch (e: any) {
+      result.redateError = e.message;
+    }
+  }
 
   if (ytc && (!only || only === 'youtube') && !st.youtube?.placeholderFix && !result.error && Date.now() < deadline - 60_000) {
     try {

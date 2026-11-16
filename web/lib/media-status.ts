@@ -13,7 +13,8 @@ export function mediaLine(c: Card | null | undefined, r: { p: 'yt' | 'sp'; id: s
   if (!c || c.status === 'new') return '🆕 Not played yet, on YouTube or Spotify.';
   if (c.status === 'finished') {
     const on = c.doneOn === 'yt' || c.doneOn === 'sp' ? ` on ${PLATFORM[c.doneOn]}` : '';
-    return `✅ Already finished${on}${c.finishedAt ? ` (${new Date(c.finishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})` : ''}.`;
+    const date = c.finishedAt ? new Date(c.finishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    return `✅ Already finished${on}${date ? ` (${c.finishedBefore ? `before ${date}` : date})` : ''}.`;
   }
   const res = c.resume;
   if (c.seen && !res && c.pct < 0.02) return `◐ Seen on ${PLATFORM[c.seen]}; it kept no position.`;

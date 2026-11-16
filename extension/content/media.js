@@ -150,7 +150,9 @@
     const verb = here === 'sp' ? 'Played' : 'Watched';
     if (card.status === 'finished') {
       const on = card.doneOn && !['both', 'manual', here].includes(card.doneOn) ? ` on ${NAME[card.doneOn]}` : '';
-      const when = card.finishedAt ? new Date(card.finishedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: new Date(card.finishedAt).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) : '';
+      const date = card.finishedAt ? new Date(card.finishedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: new Date(card.finishedAt).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) : '';
+      // "before": it was already finished when Trove first looked, so only the day it found out is known.
+      const when = date && card.finishedBefore ? `before ${date}` : date;
       return { kind: 'done', label: `✓ ${verb}${on}`, pct: 1, title: `Trove: finished${on}${when ? ` · ${when}` : ''}`, resume: null };
     }
     // Seen on a platform that kept no position (YouTube's history does that for some videos): no % to show.

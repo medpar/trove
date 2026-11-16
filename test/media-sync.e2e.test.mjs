@@ -137,6 +137,13 @@ test('a sync turns phone plays into episodes and pairs the same episode across p
   assert.equal((await V.readSecret('youtube')).jar['__Secure-1PSIDTS'], 'rotated-1');
 });
 
+test('an episode found already finished is dated "by first seen", not guessed from its release', async () => {
+  const c = (await E.lookupRefs([`sp:${E2}`]))[`sp:${E2}`];
+  assert.equal(c.status, 'finished');
+  assert.equal(c.finishedBefore, true);
+  assert.ok(c.finishedAt > Date.now() - 10 * 60e3, 'the day Trove found out, not three days after release');
+});
+
 test('the next sync writes nothing when nothing changed, and only the change when something did', async () => {
   const writes = () => N.calls.create + N.calls.update;
   const before = writes();
@@ -259,6 +266,29 @@ test('videos imported before that rule are re-read once, keeping when they were 
   assert.equal(f[`yt:${V14}`].last.at, when, 'still dated when it was watched');
   const again = await M.syncAll({ deadline: Date.now() + 120_000 });
   assert.equal(again.placeholders, undefined, 'only once');
+});
+
+test('episodes dated by the old guess (three days after release) are re-dated once, flagged unknown', async () => {
+  const E9 = '9'.repeat(22);
+  const released = '2025-03-01T10:00:00Z';
+  const guessed = Date.parse(released) + 3 * 864e5;
+  // As the old first import stored it.
+  await E.applyEvents([{ p: 'sp', id: E9, at: guessed, title: 'Old finished episode', show: 'Test Show Podcast', released, dur: 2000, ext: { pos: 2000, done: true }, src: 'spotify' }]);
+  let c = (await E.lookupRefs([`sp:${E9}`]))[`sp:${E9}`];
+  assert.equal(c.finishedAt, guessed);
+  const state = JSON.parse(globalThis.__fakeBlob.get('state/media-sync.json'));
+  delete state.spotify.dateFix;
+  globalThis.__fakeBlob.set('state/media-sync.json', JSON.stringify(state));
+  const r = await M.syncAll({ deadline: Date.now() + 120_000 });
+  assert.ok(r.redated >= 1);
+  c = (await E.lookupRefs([`sp:${E9}`]))[`sp:${E9}`];
+  assert.equal(c.finishedBefore, true);
+  assert.ok(c.finishedAt > guessed, 'no longer three days after release');
+  const page = N.live().find((p) => p.id === c.id);
+  assert.equal(c.finishedAt, Date.parse(page.created_time), 'the day Trove first saw it');
+  assert.equal(page.properties.Finished.date, null, 'Notion keeps no made-up date');
+  const again = await M.syncAll({ deadline: Date.now() + 120_000 });
+  assert.equal(again.redated, undefined, 'only once');
 });
 
 test('an expired Spotify sign-in is reported, and YouTube keeps syncing', async () => {

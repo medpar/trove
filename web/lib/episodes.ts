@@ -10,7 +10,8 @@ import { readState, writeState } from './state';
 import { notion, rt } from './store';
 
 export type P = 'yt' | 'sp';
-export type Ext = { pos?: number; dur?: number | null; done?: boolean; doneAt?: number | null; at?: number; src?: string; seen?: boolean };
+/** What a platform reported. `before`: already so when Trove first looked, so `at` is only "by then". */
+export type Ext = { pos?: number; dur?: number | null; done?: boolean; doneAt?: number | null; at?: number; src?: string; seen?: boolean; before?: boolean };
 export type Copy = { id: string; title?: string; show?: string; showId?: string; channel?: string; channelId?: string; image?: string; released?: string; dur?: number; ranges?: number[][]; pos?: number; at?: number; ext?: Ext };
 export type Rec = {
   v?: number;
@@ -24,6 +25,8 @@ export type Rec = {
   sp?: Copy;
   manual?: { done: boolean; at: number };
   finishedAt?: number;
+  /** finishedAt is only an upper bound: it was already finished when Trove first saw it. */
+  finishedBefore?: boolean;
   linked?: { by: string; score?: number; at?: number };
   unlinked?: string[];
 };
@@ -47,7 +50,8 @@ export type EpisodeEvent = {
   since?: number;
   /** Server sync bookkeeping: what to remember as seen once this event is stored. */
   mark?: { side: 'spotify' | 'youtube'; id: string; sig: string | number };
-  /** The same episode on the other platform, when the sender knows it (catalog match, manual link). */
+  /** Already so when Trove first looked (an import): `at` is only "by then", the real time is unknown. */
+  before?: boolean;
   /** The same episode on the other platform; its length and title when known (to map positions across). */
   twin?: { p: P; id: string; by?: string; score?: number; dur?: number; title?: string } | null;
   /** Show this episode belongs to in Trove (followed shows), and its series. */
@@ -67,9 +71,11 @@ export type Card = {
   status: 'new' | 'started' | 'finished';
   pct: number;
   finishedAt: number | null;
+  /** finishedAt is only "by then" (already finished when Trove first saw it). */
+  finishedBefore: boolean;
   doneOn: string | null;
-  resume: { p: P; pos: number; dur: number | null; at: number; src: string } | null;
-  last: { p: P; at: number } | null;
+  resume: { p: P; pos: number; dur: number | null; at: number; src: string; before?: boolean } | null;
+  last: { p: P; at: number; before?: boolean } | null;
   /** Seen on this platform with no position (YouTube's history keeps none for some videos). */
   seen: P | null;
   updated: string;
@@ -233,8 +239,9 @@ function propsOf(rec: Rec) {
     [E.ytId]: { rich_text: rt(rec.yt?.id || '') },
     [E.spId]: { rich_text: rt(rec.sp?.id || '') },
     [E.minutes]: { number: dur ? Math.round(dur / 60) : null },
-    [E.last]: { date: s.last ? { start: iso(s.last.at) } : null },
-    [E.finished]: { date: s.finishedAt ? { start: iso(s.finishedAt) } : null },
+    // Dates Trove can't know (already played when it first looked) stay empty rather than wrong.
+    [E.last]: { date: s.last && !s.last.before ? { start: iso(s.last.at) } : null },
+    [E.finished]: { date: s.finishedAt && !s.finishedBefore ? { start: iso(s.finishedAt) } : null },
     [E.platform]: { select: s.last ? { name: PLATFORM_NAME[s.last.p as P] } : null },
     [E.released]: { date: rec.released ? { start: rec.released.slice(0, 10) } : null },
     [E.data]: { rich_text: rt(JSON.stringify(rec)) },
@@ -256,6 +263,7 @@ export function toCard(page: any, rec = recordOf(page)): Card {
     status: s.status as Card['status'],
     pct: s.pct,
     finishedAt: s.finishedAt,
+    finishedBefore: !!s.finishedBefore,
     doneOn: s.doneOn,
     resume: s.resume as Card['resume'],
     last: s.last as Card['last'],
@@ -541,6 +549,45 @@ async function patchLocked(pageId: string, patch: EpisodePatch, link: { p: P; id
   const written = await writeRecord(page, rec);
   await trash(toTrash);
   return { card: toCard(written, rec), split };
+}
+
+/**
+ * One-time repair. Spotify episodes found already played on the first import were dated "three days
+ * after release", a guess that put episodes finished this week months back. Re-date them "by the day
+ * Trove first saw them" (the page's creation) and flag the date as unknown. Returns how many changed.
+ */
+export async function redateFirstImport(): Promise<number> {
+  const { dataSourceId } = await episodesDb();
+  const guessOf = (rec: Rec) => {
+    const released = rec.sp?.released || rec.released;
+    const ext = rec.sp?.ext;
+    return ext && ext.src === 'spotify' && !ext.before && released && ext.at === Date.parse(released) + 3 * 864e5 ? ext.at : null;
+  };
+  let cursor: string | null = null;
+  let fixed = 0;
+  do {
+    const res: any = await notion().query(dataSourceId, { page_size: 100, ...(cursor ? { start_cursor: cursor } : {}) });
+    for (const page of res.results) {
+      const rec = recordOf(page);
+      if (!guessOf(rec)) continue;
+      await withLock([`sp:${rec.sp!.id}`], async () => {
+        const { page: fresh, rec: cur } = await getEpisode(page.id);
+        const guessed = guessOf(cur);
+        if (!guessed) return;
+        const seen = Date.parse(fresh.created_time) || Date.now();
+        const ext = cur.sp!.ext!;
+        cur.sp = { ...cur.sp!, ext: { ...ext, at: seen, before: true, ...(ext.done ? { doneAt: seen } : {}) } };
+        if (cur.finishedAt === guessed) {
+          cur.finishedAt = seen;
+          cur.finishedBefore = true;
+        }
+        await writeRecord(fresh, cur);
+        fixed++;
+      });
+    }
+    cursor = res.has_more ? res.next_cursor : null;
+  } while (cursor);
+  return fixed;
 }
 
 export async function deleteEpisode(pageId: string) {

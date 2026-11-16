@@ -192,7 +192,7 @@ async function renderWatch() {
   if (card.status === 'finished') {
     st.classList.add('done');
     const on = card.doneOn && !['both', 'manual', here].includes(card.doneOn) ? ` on ${NAME[card.doneOn]}` : '';
-    st.textContent = `✓ Finished${on}${card.finishedAt ? ` · ${new Date(card.finishedAt).toLocaleDateString()}` : ''}`;
+    st.textContent = `✓ Finished${on}${card.finishedAt ? ` · ${card.finishedBefore ? 'before ' : ''}${new Date(card.finishedAt).toLocaleDateString()}` : ''}`;
   } else if (card.seen && !card.resume && (card.pct || 0) < 0.02) {
     st.textContent = `Seen on ${NAME[card.seen]}, position not saved`;
   } else {

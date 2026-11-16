@@ -118,7 +118,7 @@ export function mergeExt(a, b) {
   if (same) return { ...o, dur: pick(n, o, 'dur'), src: n.src || o.src };
   const done = !!n.done;
   const doneAt = done ? (o.done && isNum(o.doneAt) ? o.doneAt : n.doneAt ?? n.at) : null;
-  return { pos: n.pos ?? 0, dur: pick(n, o, 'dur'), done, doneAt, at: n.at, src: n.src || o.src, ...(n.seen ? { seen: true } : {}) };
+  return { pos: n.pos ?? 0, dur: pick(n, o, 'dur'), done, doneAt, at: n.at, src: n.src || o.src, ...(n.seen ? { seen: true } : {}), ...(n.before ? { before: true } : {}) };
 }
 
 /** Merge two observations of one platform copy. Order doesn't matter and merging twice changes nothing. */
@@ -175,8 +175,11 @@ export function mergeRecords(a, b) {
   }
   const manual = [a.manual, b.manual].filter(Boolean).sort((x, y) => (y.at || 0) - (x.at || 0))[0];
   if (manual) out.manual = manual;
-  const fin = [a.finishedAt, b.finishedAt].filter(isNum);
-  if (fin.length) out.finishedAt = Math.min(...fin);
+  const fin = [a, b].filter((r) => isNum(r.finishedAt)).sort((x, y) => x.finishedAt - y.finishedAt)[0];
+  if (fin) {
+    out.finishedAt = fin.finishedAt;
+    if (fin.finishedBefore) out.finishedBefore = true;
+  }
   const unlinked = [...new Set([...(a.unlinked || []), ...(b.unlinked || [])])];
   if (unlinked.length) out.unlinked = unlinked;
   if (a.linked || b.linked) out.linked = a.linked?.by === 'manual' ? a.linked : b.linked || a.linked;
@@ -205,19 +208,26 @@ export function applyEvent(rec, ev) {
     incoming.pos = Math.max(0, ev.pos);
     incoming.at = at;
   }
-  if (ev.ext) incoming.ext = { pos: Math.max(0, ev.ext.pos || 0), dur: ev.ext.dur ?? ev.dur ?? undefined, done: !!ev.ext.done, doneAt: ev.ext.done ? at : null, at, src: ev.src || ev.p, ...(ev.ext.seen && !ev.ext.done ? { seen: true } : {}) };
+  if (ev.ext) incoming.ext = { pos: Math.max(0, ev.ext.pos || 0), dur: ev.ext.dur ?? ev.dur ?? undefined, done: !!ev.ext.done, doneAt: ev.ext.done ? at : null, at, src: ev.src || ev.p, ...(ev.ext.seen && !ev.ext.done ? { seen: true } : {}), ...(ev.before ? { before: true } : {}) };
   base[ev.p] = mergePlatform(base[ev.p], incoming);
   if (!base.title && ev.title) base.title = ev.title;
   if (!base.show && (ev.show || ev.channel)) base.show = ev.show || ev.channel;
   if (!base.image && ev.image) base.image = ev.image;
   if (!base.released && ev.released) base.released = ev.released;
-  return settle(base, at);
+  return settle(base, at, !!ev.before);
 }
 
-/** Record the moment an episode first counts as finished (finishing is sticky). */
-export function settle(rec, at = Date.now()) {
+/**
+ * Record the moment an episode first counts as finished (finishing is sticky). `before`: Trove didn't see
+ * it happen (it was already played when Trove first looked), so `at` is only "by then".
+ */
+export function settle(rec, at = Date.now(), before = false) {
   const s = summarize(rec);
-  if (s.finished && !(rec.finishedAt > resetTime(rec))) rec.finishedAt = at;
+  if (s.finished && !(rec.finishedAt > resetTime(rec))) {
+    rec.finishedAt = at;
+    if (before) rec.finishedBefore = true;
+    else delete rec.finishedBefore;
+  }
   return rec;
 }
 
@@ -225,9 +235,13 @@ export function settle(rec, at = Date.now()) {
 export function markManual(rec, done, at = Date.now()) {
   const out = { ...rec, manual: { done: !!done, at } };
   if (done) {
-    if (!(out.finishedAt > resetTime(rec))) out.finishedAt = at;
+    if (!(out.finishedAt > resetTime(rec))) {
+      out.finishedAt = at;
+      delete out.finishedBefore;
+    }
   } else {
     delete out.finishedAt;
+    delete out.finishedBefore;
     for (const p of PLATFORMS) if (out[p]) out[p] = { ...out[p], ranges: [] };
   }
   return out;
@@ -254,7 +268,7 @@ function platformDone(x, resetAt) {
  *  doneOn: 'yt'|'sp'|'both'|'manual'|null, resume: {p, pos, dur, at, src}|null, last: {p, at}|null}
  */
 export function summarize(rec) {
-  if (!rec) return { status: 'new', finished: false, pct: 0, finishedAt: null, doneOn: null, resume: null, last: null, seen: null };
+  if (!rec) return { status: 'new', finished: false, pct: 0, finishedAt: null, finishedBefore: false, doneOn: null, resume: null, last: null, seen: null };
   const resetAt = resetTime(rec);
   const fractions = [];
   let heard = 0;
@@ -276,9 +290,9 @@ export function summarize(rec) {
     if (isNum(x.at) && isNum(x.pos)) cands.push({ p, pos: x.pos, dur, at: x.at, src: 'trove' });
     // "Seen" = the platform says you watched it but kept no position: it dates the play, never sets a resume point.
     if (extLive && x.ext.seen) seenOn.push(p);
-    if (extLive && isNum(x.ext.at)) cands.push({ p, pos: x.ext.pos || 0, dur, at: x.ext.at, src: x.ext.src || p, done: x.ext.done, seen: !!x.ext.seen });
+    if (extLive && isNum(x.ext.at)) cands.push({ p, pos: x.ext.pos || 0, dur, at: x.ext.at, src: x.ext.src || p, done: x.ext.done, seen: !!x.ext.seen, before: !!x.ext.before });
   }
-  for (const c of cands) if (!last || c.at > last.at) last = { p: c.p, at: c.at };
+  for (const c of cands) if (!last || c.at > last.at) last = { p: c.p, at: c.at, ...(c.before ? { before: true } : {}) };
   const union = Math.min(1, coveredSeconds(normRanges(fractions, { gap: 0.004, round: false }), 1));
   const manualDone = rec.manual?.done === true;
   const sticky = isNum(rec.finishedAt) && rec.finishedAt > resetAt;
@@ -288,7 +302,7 @@ export function summarize(rec) {
   // Resume where you were last on any platform, unless that was the very end.
   let resume = null;
   const latest = cands.filter((c) => !c.done && !c.seen).sort((x, y) => y.at - x.at)[0];
-  if (latest && latest.pos >= 15 && !(latest.dur && latest.pos >= latest.dur - 45)) resume = { p: latest.p, pos: Math.round(latest.pos), dur: latest.dur || null, at: latest.at, src: latest.src };
+  if (latest && latest.pos >= 15 && !(latest.dur && latest.pos >= latest.dur - 45)) resume = { p: latest.p, pos: Math.round(latest.pos), dur: latest.dur || null, at: latest.at, src: latest.src, ...(latest.before ? { before: true } : {}) };
   let on = null;
   if (finished) {
     if (doneOn.length === 2 || (!doneOn.length && union >= 0.92)) on = 'both';
@@ -301,6 +315,8 @@ export function summarize(rec) {
     finished,
     pct,
     finishedAt: finished ? (sticky ? rec.finishedAt : manualDone ? rec.manual.at : last?.at || null) : null,
+    // The finish date is only "by then": Trove found it already played and can't know when.
+    finishedBefore: finished && (sticky ? !!rec.finishedBefore : !manualDone && !!last?.before),
     doneOn: on,
     resume,
     last,

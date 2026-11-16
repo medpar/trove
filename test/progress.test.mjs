@@ -259,3 +259,31 @@ test('a finished video stays finished when you open it again or start rewatching
   // Only "Not finished" by hand undoes it.
   assert.equal(summarize(markManual(f, false, T + 20000)).status, 'new');
 });
+
+test('a play Trove found already finished keeps "before <day it found out>", never a guessed date', () => {
+  const T = 1_800_000_000_000;
+  // First import: finished on Spotify, time unknown.
+  let r = applyEvent(null, { p: 'sp', id: 'S'.repeat(22), at: T, dur: 3000, ext: { pos: 3000, done: true }, before: true, src: 'spotify' });
+  let s = summarize(r);
+  assert.equal(s.status, 'finished');
+  assert.equal(s.finishedAt, T);
+  assert.equal(s.finishedBefore, true);
+  assert.equal(s.last.before, true);
+  // Later reports don't move a finish date (sticky), and say nothing new about it.
+  r = applyEvent(r, { p: 'sp', id: 'S'.repeat(22), at: T + 86_400_000, dur: 3000, ext: { pos: 600, done: false }, src: 'spotify' });
+  s = summarize(r);
+  assert.equal(s.finishedAt, T);
+  assert.equal(s.finishedBefore, true);
+  assert.equal(s.last.before, undefined, 'the rewatch itself was seen happen');
+  // A finish Trove sees happen is dated exactly.
+  const k = applyEvent(null, { p: 'sp', id: 'K'.repeat(22), at: T, dur: 3000, ext: { pos: 3000, done: true }, src: 'spotify' });
+  assert.equal(summarize(k).finishedBefore, false);
+  // Merging two pages keeps the earliest finish and whether it was only "by then".
+  const m = mergeRecords({ ...k, finishedAt: T + 5000 }, { ...r, finishedAt: T, finishedBefore: true });
+  assert.equal(m.finishedAt, T);
+  assert.equal(m.finishedBefore, true);
+  // "Not finished" by hand forgets it; finishing by hand is dated exactly.
+  const n = markManual(r, false, T + 10);
+  assert.equal(n.finishedBefore, undefined);
+  assert.equal(summarize(markManual(n, true, T + 20)).finishedBefore, false);
+});
