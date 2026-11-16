@@ -1,8 +1,8 @@
 // The Trove Telegram bot: send or forward anything to save it, then file it with buttons.
 import 'server-only';
-import { clock, mapPosition, watchUrl } from '../../extension/lib/progress.js';
 import { afterSave } from './enrich';
 import { lookupRefs, refOf } from './episodes';
+import { mediaLine } from './media-status';
 import { saveFile } from './files';
 import { ask, forget, hybridSearch } from './semantic';
 import { env } from './env';
@@ -188,27 +188,12 @@ async function onMessage(msg: any) {
   await react(chatId, msg.message_id, '👍');
 }
 
-const PLATFORM = { yt: 'YouTube', sp: 'Spotify' } as const;
-
 /** "Already finished on Spotify", "34% heard, stopped at 15:03 on YouTube", or "not played yet", per link. */
 async function mediaStatus(urls: string[]): Promise<string | null> {
   const refs = urls.map((u) => refOf(u)).filter(Boolean) as { p: 'yt' | 'sp'; id: string }[];
   if (!refs.length) return null;
   const found = await lookupRefs(refs.map((r) => `${r.p}:${r.id}`));
-  const lines = refs.map((r) => {
-    const c = found[`${r.p}:${r.id}`];
-    if (!c || c.status === 'new') return '🆕 Not played yet, on YouTube or Spotify.';
-    if (c.status === 'finished') {
-      const on = c.doneOn === 'yt' || c.doneOn === 'sp' ? ` on ${PLATFORM[c.doneOn]}` : '';
-      return `✅ Already finished${on}${c.finishedAt ? ` (${new Date(c.finishedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })})` : ''}.`;
-    }
-    const res = c.resume;
-    if (!res) return `◐ ${Math.round(c.pct * 100)}% heard.`;
-    const here = r.p;
-    const pos = res.p === here ? res.pos : mapPosition(res.pos, res.dur || c[res.p]?.dur || null, c[here]?.dur || null).pos;
-    const link = watchUrl(here, r.id, pos);
-    return `◐ ${Math.round(c.pct * 100)}% heard, stopped at ${clock(res.pos)} on ${PLATFORM[res.p]}. <a href="${esc(link)}">Continue on ${PLATFORM[here]} at ${clock(pos)}</a>`;
-  });
+  const lines = refs.map((r) => mediaLine(found[`${r.p}:${r.id}`], r));
   return lines.length === 1 ? lines[0] : lines.map((l, i) => `${i + 1}. ${l}`).join('\n');
 }
 
